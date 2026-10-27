@@ -66,7 +66,7 @@ export const AuthProvider = ({
     getSession()
 
     // Ouvinte para mudanças de auth
-    const { data: subscription } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setIsAuthenticated(!!session)
         if (session?.user) {
@@ -92,7 +92,7 @@ export const AuthProvider = ({
     )
 
     return () => {
-      subscription.unsubscribe()
+      subscription?.unsubscribe()
     }
   }, [])
 

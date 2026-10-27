@@ -3,7 +3,7 @@ import { createClient, User } from '@supabase/supabase-js'
 
 // Cria cliente Supabase usando variáveis de ambiente
 const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUBABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 )
 
@@ -58,15 +58,22 @@ export const CalendarProvider = ({
   useEffect(() => {
     const init = async () => {
       // Obter usuário atual
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      const { data, error } = await supabase.auth.getUser()
 
-      if (userError) console.error('Auth error:', userError)
-      if (user) {
-        setUser(user)
+      if (error) {
+        console.error('Auth error:', error)
+        setUser(null)
+        return
+      }
+
+      const authenticatedUser = data?.user
+
+      if (authenticatedUser) {
+        setUser(authenticatedUser)
 
         // Carregar calendários do usuário
         const loadCalendars = async () => {
-          const { data, error } = await supabase.from('calendars').select('*').eq('user_id', user.id)
+          const { data, error } = await supabase.from('calendars').select('*').eq('user_id', authenticatedUser.id)
 
           if (data) setCalendars(data)
           if (error) console.error('Calendars error:', error)
@@ -74,7 +81,7 @@ export const CalendarProvider = ({
 
         // Carregar eventos
         const loadEventsFromSupabase = async () => {
-          const { data, error } = await supabase.from('events').select('*').eq('user_id', user.id)
+          const { data, error } = await supabase.from('events').select('*').eq('user_id', authenticatedUser.id)
 
           if (data) setEvents(data)
           if (error) console.error('Events error:', error)
@@ -102,11 +109,17 @@ export const CalendarProvider = ({
         await loadCalendars()
         await loadEventsFromSupabase()
         await loadHolidaysFromSupabase()
+      } else {
+        // Usuário não logado, limpar estado
+        setUser(null)
+        setEvents([])
+        setCalendars([])
+        setHolidays([])
       }
     }
 
     init()
-  }, [user?.id])
+  }, [])
 
   // Carregar eventos quando o mês/ano mudar
   useEffect(() => {
@@ -126,7 +139,7 @@ export const CalendarProvider = ({
     }
 
     loadEventsForPeriod()
-  }, [year, month, user?.id])
+  }, [year, month])
 
   // Salvar novo evento
   const saveEvent = async (eventData: any) => {
@@ -150,7 +163,7 @@ export const CalendarProvider = ({
         recurrence_rule: eventData.recurrence_rule,
       })
       .select()
-    
+
     if (error) {
       console.error('Save event error:', error)
       return null

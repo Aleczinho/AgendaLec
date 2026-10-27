@@ -4,10 +4,14 @@ import { createContext, useContext, useState, useEffect } from 'react'
 let supabase: any = null
 
 try {
-  supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY
-  )
+  const url = import.meta.env.VITE_SUPABASE_URL?.trim()
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+
+  if (url && key) {
+    supabase = createClient(url, key)
+  } else {
+    console.warn('Variáveis de ambiente do Supabase não configuradas')
+  }
 } catch (e) {
   console.warn('Supabase not configured, using client-side only')
 }
