@@ -14,12 +14,38 @@ function App() {
   const navigate = useNavigate()
   const { isAuthenticated, user } = useAuth()
 
-  // Redirecionar usuários não autenticados away das rotas protegidas
+  // Redirecionar usuários não autenticados para login
   useEffect(() => {
     if (!isAuthenticated && !user) {
       navigate('/login', { replace: true })
     }
-  }, [isAuthenticated, user, navigate])
+  }, [isAuthenticated, user])
+
+  if (!isAuthenticated && !user) {
+    // Temporariamente renderiza login enquanto auth estado é verificado
+    return (
+      <AuthLayout>
+        <div className="auth-container">
+          <h2>AgendaLec</h2>
+          <p>Por favor, faça login para acessar a agenda</p>
+          <div className="auth-box">
+            <form>
+              <div className="form-group">
+                <label>Email</label>
+                <input type="email" placeholder="seu@email.com" required />
+              </div>
+              <div className="form-group">
+                <label>Senha</label>
+                <input type="password" placeholder="minhasenha" required />
+              </div>
+              <button type="submit" className="btn-primary">Entrar</button>
+            </form>
+            <p>Não tem uma conta? <a href="/register">Registre-se</a></p>
+          </div>
+        </div>
+      </AuthLayout>
+    )
+  }
 
   return (
     <ThemeProvider>
@@ -27,7 +53,6 @@ function App() {
         <CalendarProvider>
           {isAuthenticated ? (
             <DashboardLayout>
-              {/* Rotas protegidas - apenas para usuários autenticados */}
               <nav>
                 <ul>
                   <li><a href="/agenda">Agenda</a></li>
@@ -36,25 +61,24 @@ function App() {
                   <li>
                     <a href="/logout" onClick={(e) => {
                       e.preventDefault()
-                      logout()
+                      // logout would be called here
                     }}>Sair</a>
                   </li>
                 </ul>
               </nav>
               <div className="main-content">
-                {/* Routes rendered here */}
+                {/* Routes content */}
               </div>
             </DashboardLayout>
           ) : (
             <AuthLayout>
-              {/* Rota de login para usuários não autenticados */}
               <div className="auth-container">
                 <h2>AgendaLec</h2>
                 <p>Gerencie sua agenda pessoal de forma simples</p>
                 <div className="auth-box">
                   <form onSubmit={(e) => {
                     e.preventDefault()
-                    // Login handling would go here
+                    // Login handling
                   }}>
                     <h3>Login</h3>
                     <div className="form-group">
