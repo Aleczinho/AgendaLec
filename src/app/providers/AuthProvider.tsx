@@ -44,7 +44,7 @@ export const AuthProvider = ({
       if (data.session?.user) {
         const user = data.session.user as User
         setUser(user)
-        setEmail(user.email)
+        setEmail(user.email ?? null)
         // Buscar perfil do usuário
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -63,12 +63,12 @@ export const AuthProvider = ({
 
     // Ouvinte para mudanças de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         setIsAuthenticated(!!session)
         if (session?.user) {
           const user = session.user as User
           setUser(user)
-          setEmail(user.email)
+          setEmail(user.email ?? null)
           
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
@@ -79,7 +79,6 @@ export const AuthProvider = ({
           if (profile) {
             setDisplayName(profile.display_name)
           }
-          setLoading(false)
         } else {
           setUser(null)
           setDisplayName(null)
@@ -108,7 +107,7 @@ export const AuthProvider = ({
     if (data.session?.user) {
       const user = data.session.user as User
       setUser(user)
-      setEmail(user.email)
+      setEmail(user.email ?? null)
       setIsAuthenticated(true)
       
       // Criar ou atualizar perfil
@@ -149,7 +148,7 @@ export const AuthProvider = ({
     if (data.user) {
       const user = data.user as User
       setUser(user)
-      setEmail(user.email)
+      setEmail(user.email ?? null)
       setIsAuthenticated(true)
       
       // Criar perfil inicial
