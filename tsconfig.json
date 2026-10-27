@@ -19,5 +19,5 @@
     "plugins": [],
     "types": ["node"]
   },
-  "include": ["*.ts", "*.tsx", "*.vue", "*.html"]
+  "include": ["src/**/*"]
 }

@@ -1,21 +1,32 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { supabase } from '@/lib/supabase'
 
 export const LoginPage = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const navigate = useNavigate()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    // Auth logic would go here
-    setTimeout(() => {
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      console.error('Login error:', error.message)
       setIsLoading(false)
-      // Navigate to dashboard after login
-    }, 1000)
+      return
+    }
+
+    // Navigate to dashboard after successful login
+    navigate('/agenda', { replace: true })
   }
 
   return (

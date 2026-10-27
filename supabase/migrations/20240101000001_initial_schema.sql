@@ -32,8 +32,8 @@ CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING
 -- Descrição: Agendas/calendários do usuário (ex: Rotina Pessoal, Escola, Igreja)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.calendars (
-  id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
   color TEXT DEFAULT '#3B82F6',
@@ -56,8 +56,8 @@ CREATE POLICY "Users can delete own calendars" ON public.calendars FOR DELETE US
 -- Descrição: Eventos/compromissos do usuário
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.events (
-  id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   calendar_id UUID REFERENCES public.calendars ON DELETE SET NULL,
   title TEXT NOT NULL,
   description TEXT,
@@ -88,8 +88,8 @@ CREATE POLICY "Users can delete own events" ON public.events FOR DELETE USING (a
 -- Descrição: Feriados e datas especiais (pode ser populado via API ou manual)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.holiday_dates (
-  id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   name TEXT NOT NULL,
   scope TEXT, -- 'nacional', 'estadual', 'municipal'

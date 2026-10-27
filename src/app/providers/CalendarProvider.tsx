@@ -78,7 +78,10 @@ export const CalendarProvider = ({
 
         // Carregar calendários do usuário
         const loadCalendars = async () => {
-          const { data, error } = await supabase.from('calendars').select('*').eq('user_id', authenticatedUser.id)
+          const { data, error } = await supabase
+            .from('calendars')
+            .select('*')
+            .eq('user_id', authenticatedUser.id)
 
           if (data) setCalendars(data)
           if (error) console.error('Calendars error:', error)
@@ -86,7 +89,10 @@ export const CalendarProvider = ({
 
         // Carregar eventos
         const loadEventsFromSupabase = async () => {
-          const { data, error } = await supabase.from('events').select('*').eq('user_id', authenticatedUser.id)
+          const { data, error } = await supabase
+            .from('events')
+            .select('*')
+            .eq('user_id', authenticatedUser.id)
 
           if (data) setEvents(data)
           if (error) console.error('Events error:', error)
@@ -97,18 +103,15 @@ export const CalendarProvider = ({
           const today = new Date()
           const currentYear = today.getFullYear()
 
-          const holidays = [
-            { id: '1', date: currentYear + '-01-01', name: 'Confraternização Universal', scope: 'nacional' },
-            { id: '2', date: currentYear + '-04-21', name: 'Tiradentes', scope: 'nacional' },
-            { id: '3', date: currentYear + '-05-01', name: 'Dia do Trabalho', scope: 'nacional' },
-            { id: '4', date: currentYear + '-09-07', name: 'Independência do Brasil', scope: 'nacional' },
-            { id: '5', date: currentYear + '-10-12', name: 'Nossa Senhora Aparecida', scope: 'nacional' },
-            { id: '6', date: currentYear + '-11-02', name: 'Finados', scope: 'nacional' },
-            { id: '7', date: currentYear + '-12-25', name: 'Natal', scope: 'nacional' },
-          ]
+          const { data, error } = await supabase
+            .from('holiday_dates')
+            .select('*')
+            .eq('year', currentYear)
 
-          const filteredHolidays = holidays.filter((h: any) => new Date(h.date).getFullYear() === currentYear)
-          setHolidays(filteredHolidays)
+          if (data) {
+            setHolidays(data)
+          }
+          if (error) console.error('Holidays error:', error)
         }
 
         await loadCalendars()
@@ -137,6 +140,8 @@ export const CalendarProvider = ({
       const { data, error } = await supabase
         .from('events')
         .select('*')
+        .gte('start_at', startOfPeriod.toISOString())
+        .lte('end_at', endOfPeriod.toISOString())
         .eq('user_id', user.id)
 
       if (data) setEvents(data)
@@ -257,9 +262,35 @@ export const CalendarProvider = ({
     holidays,
     setHolidays,
     user,
-    loadEvents: async () => {},
-    loadCalendars: async () => {},
-    loadHolidays: async () => {},
+    loadEvents: async () => {
+      if (!user) return
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('user_id', user.id)
+      if (data) setEvents(data)
+      if (error) console.error('Load events error:', error)
+    },
+    loadCalendars: async () => {
+      if (!user) return
+      const { data, error } = await supabase
+        .from('calendars')
+        .select('*')
+        .eq('user_id', user.id)
+      if (data) setCalendars(data)
+      if (error) console.error('Load calendars error:', error)
+    },
+    loadHolidays: async () => {
+      if (!user) return
+      const today = new Date()
+      const currentYear = today.getFullYear()
+      const { data, error } = await supabase
+        .from('holiday_dates')
+        .select('*')
+        .eq('year', currentYear)
+      if (data) setHolidays(data)
+      if (error) console.error('Load holidays error:', error)
+    },
     saveEvent,
     updateEvent,
     deleteEvent,
