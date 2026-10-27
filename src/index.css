@@ -1,0 +1,19 @@
+/* Index CSS - imports all styles */
+@import './styles/tokens.css';
+@import './styles/global.css';
+@import './styles/components.css';
+@import './styles/responsive.css';
+
+/* CSS variables for the application */
+:root {
+  --primary-color: #2563EB;
+  --accent-color: #38BDF8;
+  --success-color: #10B981;
+  --warning-color: #F59E0B;
+  --error-color: #EF4444;
+  --text-color: #172033;
+  --text-secondary: #667085;
+  --border-color: #E4E9F2;
+  --bg-color: #F5F7FB;
+  --surface-color: #FFFFFF;
+}
