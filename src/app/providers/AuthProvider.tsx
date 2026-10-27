@@ -79,10 +79,12 @@ export const AuthProvider = ({
           if (profile) {
             setDisplayName(profile.display_name)
           }
+          setLoading(false)
         } else {
           setUser(null)
           setDisplayName(null)
           setEmail(null)
+          setLoading(false)
         }
       }
     )
@@ -95,8 +97,7 @@ export const AuthProvider = ({
   const login = async (email: string, password: string) => {
     setLoading(true)
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email, password,
     })
 
     if (error) {
@@ -137,8 +138,7 @@ export const AuthProvider = ({
   const signUp = async (email: string, password: string) => {
     setLoading(true)
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
+      email, password,
     })
 
     if (error) {

@@ -53,7 +53,16 @@ export const CalendarProvider = ({
   // Carrega dados do usuário e do banco ao montar
   useEffect(() => {
     const init = async () => {
-      // Obter usuário atual
+      // Primeiro, verificar se há sessão ativa
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        // Usuário não autenticado, definir estado silenciosamente sem erro no console
+        setUser(null)
+        return
+      }
+
+      // Se há sessão ativa, buscar dados do usuário
       const { data, error } = await supabase.auth.getUser()
 
       if (error) {
