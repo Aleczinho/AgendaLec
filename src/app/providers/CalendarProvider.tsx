@@ -272,7 +272,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
     const { data, error } = await supabase
       .from('events')
-      .insert({ ...eventData, user_id: user.id })
+      .insert({ ...eventData, id: crypto.randomUUID(), user_id: user.id })
       .select()
       .single()
 

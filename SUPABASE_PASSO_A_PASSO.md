@@ -33,6 +33,7 @@ No painel do Supabase, abra **SQL Editor** e execute o conteúdo dos arquivos, n
 3. `supabase/migrations/20261027000002_authenticated_access.sql`
 4. `supabase/migrations/20261027000003_holiday_id_default.sql`
 5. `supabase/migrations/20261027000004_fix_holiday_id_foreign_key.sql`
+6. `supabase/migrations/20261027000005_events_id_default.sql`
 
 Execute cada arquivo uma única vez em um banco novo. A primeira migração não é totalmente repetível, pois cria políticas RLS sem removê-las antes. Se o banco já tiver tabelas ou migrações aplicadas, confira o estado antes de executar qualquer arquivo; não reaplique a migração inicial por cima de um banco existente.
 
@@ -47,6 +48,8 @@ Esta migração corrige também as permissões de `profiles` e `calendars`, usad
 A migração `20261027000003_holiday_id_default.sql` garante que o banco gere o UUID de feriados automaticamente, inclusive quando a tabela já existia antes das migrações.
 
 A migração `20261027000004_fix_holiday_id_foreign_key.sql` remove a chave estrangeira incorreta de `holiday_dates.id`, se existir. Esse campo identifica o feriado e não deve apontar para `auth.users` ou outra tabela.
+
+A migração `20261027000005_events_id_default.sql` configura a geração automática de UUID em `events.id`, inclusive em tabelas que já existiam. O aplicativo também envia um UUID ao criar o compromisso para funcionar em bancos legados antes da aplicação dessa migração.
 
 ## 5. Configure a autenticação
 
