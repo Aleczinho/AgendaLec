@@ -1,32 +1,27 @@
 import { cn } from '@/lib/utils'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
-import { CalendarNav } from '@/components/ui/CalendarNav'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { errorMessage } from '@/lib/errors'
+import { formatDateInput, isValidDateInput, maskDateInput } from '@/lib/dateInput'
 
-const eventSchema = z.object({
+export const eventSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório'),
   description: z.string().optional(),
-  date: z.date(),
+  date: z.string().refine(isValidDateInput, 'Informe uma data válida no formato dd/mm/aa'),
   start_time: z.string().optional(),
   end_time: z.string().optional(),
   category: z.string(),
-  calendar_id: z.string().optional(),
+  all_day: z.boolean().default(false),
+  certainty: z.enum(['confirmed', 'planned', 'possible']).default('confirmed'),
   location: z.string().optional(),
-  color: z.string().optional(),
-  status: z.enum(['pending', 'completed', 'cancelled']).default('pending'),
-  notes: z.string().optional(),
-  recurrence: z.string().optional(),
-  reminder: z.string().optional(),
 })
 
-type EventFormValues = z.infer<typeof eventSchema>
+export type EventFormValues = z.infer<typeof eventSchema>
 
 interface EventFormProps {
   initialData?: EventFormValues
-  onSubmit: (data: EventFormValues) => void
+  onSubmit: (data: EventFormValues) => void | Promise<void>
   onClose: () => void
   mode: 'create' | 'edit'
   eventId?: string
@@ -39,9 +34,8 @@ export const EventForm = ({
   mode = 'create',
   eventId,
 }: EventFormProps) => {
-  const navigate = useNavigate()
-  const [recurrence, setRecurrence] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const {
     register,
@@ -52,43 +46,51 @@ export const EventForm = ({
     defaultValues: {
       title: '',
       description: '',
-      date: new Date(),
+      date: formatDateInput(new Date()),
       start_time: '',
       end_time: '',
       category: 'rotina',
-      calendar_id: '',
+      all_day: false,
+      certainty: 'confirmed',
       location: '',
-      color: '#3B82F6',
-      status: 'pending',
-      notes: '',
-      recurrence: 'none',
-      reminder: '',
     },
   })
+  const dateField = register('date', {
+    required: 'A data é obrigatória',
+    validate: value => isValidDateInput(value) || 'Informe uma data válida no formato dd/mm/aa',
+  })
+
+  useEffect(() => {
+    if (initialData) reset(initialData)
+  }, [initialData, reset])
 
   const onSubmitHandler = handleSubmit(async (values: EventFormValues) => {
     setIsSubmitting(true)
+    setSubmitError('')
     try {
+      if (!values.all_day && values.start_time && values.end_time && values.end_time <= values.start_time) {
+        setSubmitError('O horário final deve ser posterior ao horário inicial.')
+        return
+      }
       await onSubmit(values)
       onClose()
     } catch (error) {
-      console.error('Erro ao salvar evento:', error)
+      setSubmitError(errorMessage(error, 'Não foi possível salvar o compromisso.'))
     } finally {
       setIsSubmitting(false)
     }
   })
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <CalendarNav onPrev={() => {}} onNext={() => {}} onToday={() => {}} />
-
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-border">
-        <h2 className="text-xl font-bold mb-4">
-          {mode === 'create' ? 'Novo Compromisso' : 'Editar Compromisso'}
+    <div className="event-form">
+      <div className="event-form-card">
+        <h2 id="event-modal-title" className="event-form-title">
+          {mode === 'create' ? 'Adicionar compromisso' : 'Editar compromisso'}
         </h2>
+        <p className="event-form-hint">Este compromisso acontece uma vez. Para afazeres que se repetem, use Rotina.</p>
 
-        <form onSubmit={onSubmitHandler} className="space-y-4">
-          <div>
+        <form onSubmit={onSubmitHandler}>
+          <div className="form-field">
             <label className="block text-sm font-medium text-secondary mb-1">Título</label>
             <input
               {...register('title', { required: 'O título é obrigatório' })}
@@ -98,146 +100,103 @@ export const EventForm = ({
             {errors.title && <p className="text-sm text-red-600">{errors.title.message}</p>}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-secondary mb-1">Descrição</label>
-            <textarea
-              {...register('description', { valueAsString: true })}
-              className="input input-sm"
-              rows={3}
-              placeholder="Descrição opcional..."
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+          <div className="event-form-grid">
+            <div className="form-field">
               <label className="block text-sm font-medium text-secondary mb-1">Data</label>
               <input
-                {...register('date', { valueAsDate: true })}
-                type="date"
-                className="input"
+                {...dateField}
+                onChange={event => {
+                  event.target.value = maskDateInput(event.target.value)
+                  void dateField.onChange(event)
+                }}
+                className={cn('input', errors.date && 'border-red-500')}
+                inputMode="numeric"
+                placeholder="dd/mm/aa"
+                aria-describedby={errors.date ? 'event-date-error' : undefined}
+                required
+              />
+              {errors.date && <p id="event-date-error" className="text-sm text-red-600">{errors.date.message}</p>}
+            </div>
+            <label className="form-checkbox">
+              <input type="checkbox" {...register('all_day')} />
+              Dia inteiro
+            </label>
+          </div>
+
+          <div className="form-field">
+            <label className="block text-sm font-medium text-secondary mb-1">Horário (opcional)</label>
+            <div className="flex gap-2">
+              <input
+                {...register('start_time')}
+                type="time"
+                className="input input-sm flex-1"
+                aria-label="Horário de início"
+              />
+              <span className="text-sm text-secondary">a</span>
+              <input
+                {...register('end_time')}
+                type="time"
+                className="input input-sm flex-1"
+                aria-label="Horário de término"
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-1">Horário</label>
-              <div className="flex gap-2">
-                <input
-                  {...register('start_time', { valueAsString: true })}
-                  type="time"
-                  className="input input-sm flex-1"
-                />
-                <span className="text-sm text-secondary">a</span>
-                <input
-                  {...register('end_time', { valueAsString: true })}
-                  type="time"
-                  className="input input-sm flex-1"
+          <div className="event-form-grid">
+            <div className="form-field">
+              <label className="block text-sm font-medium text-secondary mb-1">Categoria</label>
+              <select {...register('category')} className="select select-sm">
+                <option value="rotina">Rotina</option>
+                <option value="escola">Escola</option>
+                <option value="estagio">Estágio</option>
+                <option value="deslocamento">Deslocamento</option>
+                <option value="academia">Academia</option>
+                <option value="igreja">Igreja</option>
+                <option value="aprifixo">Aprisco</option>
+                <option value="estudos">Estudos</option>
+                <option value="afazeres-domesticos">Afazeres domésticos</option>
+                <option value="lazer">Lazer</option>
+                <option value="saude">Saúde</option>
+                <option value="feriado">Feriado</option>
+                <option value="evento-especial">Evento especial</option>
+                <option value="descanso">Descanso</option>
+                <option value="outros">Outros</option>
+              </select>
+            </div>
+            <div className="form-field">
+              <label className="block text-sm font-medium text-secondary mb-1">Confirmação</label>
+              <select {...register('certainty')} className="select select-sm">
+                <option value="confirmed">Confirmado</option>
+                <option value="planned">Previsto</option>
+                <option value="possible">Possibilidade</option>
+              </select>
+            </div>
+          </div>
+
+          <details className="event-optional-fields">
+            <summary>Mais detalhes (opcional)</summary>
+            <div className="event-optional-fields-content">
+              <div className="form-field">
+                <label className="block text-sm font-medium text-secondary mb-1">Descrição</label>
+                <textarea
+                  {...register('description')}
+                  className="input input-sm"
+                  rows={2}
+                  placeholder="Informações adicionais..."
                 />
               </div>
+              <div className="form-field">
+                <label className="block text-sm font-medium text-secondary mb-1">Local</label>
+                <input {...register('location')} className="input" placeholder="Local opcional..." />
+              </div>
             </div>
-          </div>
+          </details>
 
-          <div>
-            <label className="block text-sm font-medium text-secondary mb-1">Categoria</label>
-            <select {...register('category', { mode: 'onChange' })} className="select select-sm">
-              <option value="rotina">Rotina</option>
-              <option value="escola">Escola</option>
-              <option value="estagio">Estágio</option>
-              <option value="deslocamento">Deslocamento</option>
-              <option value="academia">Academia</option>
-              <option value="igreja">Igreja</option>
-              <option value="aprifixo">Aprisco</option>
-              <option value="estudos">Estudos</option>
-              <option value="afazeres-domesticos">Afazeres Domésticos</option>
-              <option value="lazer">Lazer</option>
-              <option value="saude">Saúde</option>
-              <option value="feriado">Feriado</option>
-              <option value="evento-especial">Evento Especial</option>
-              <option value="descanso">Descanso</option>
-              <option value="outros">Outros</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-secondary mb-1">Agenda</label>
-            <select {...register('calendar_id', { mode: 'onChange' })} className="select select-sm">
-              <option value="">Nenhuma</option>
-              <option value="pessoal">Rotina Pessoal</option>
-              <option value="escola">Escola e Estágio</option>
-              <option value="igreja">Igreja</option>
-              <option value="estudos">Estudos</option>
-              <option value="academia">Academia</option>
-              <option value="projetos">Projetos</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-secondary mb-1">Local</label>
-            <input
-              {...register('location', { valueAsString: true })}
-              className="input"
-              placeholder="Local opcional..."
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-1">Cor</label>
-              <select {...register('color', { mode: 'onChange' })} className="select select-sm">
-                <option value="#3B82F6">Azul</option>
-                <option value="#10B981">Verde</option>
-                <option value="#F59E0B">Laranja</option>
-                <option value="#EF4444">Vermelho</option>
-                <option value="#A78BFA">Roxo</option>
-                <option value="#67E8F9">Ciano</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-1">Status</label>
-              <select {...register('status', { mode: 'onChange' })} className="select select-sm">
-                <option value="pending">Pendente</option>
-                <option value="completed">Concluído</option>
-                <option value="cancelled">Cancelado</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-secondary mb-1">Observações</label>
-            <textarea
-              {...register('notes', { valueAsString: true })}
-              className="input input-sm"
-              rows={3}
-              placeholder="Observações adicionais..."
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-1">Recorrência</label>
-              <select {...register('recurrence', { mode: 'onChange' })} className="select select-sm">
-                <option value="none">Não recorrente</option>
-                <option value="daily">Diário</option>
-                <option value="weekly">Semanal</option>
-                <option value="monthly">Mensal</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-1">Lembrete</label>
-              <select {...register('reminder', { mode: 'onChange' })} className="select select-sm">
-                <option value="none">Nenhum</option>
-                <option value="1h">1 hora antes</option>
-                <option value="1d">1 dia antes</option>
-                <option value="1w">1 semana antes</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-6 pt-6 border-t border-display flex flex-col gap-3">
+          <div className="event-form-actions">
+            {submitError && <p role="alert" className="text-sm text-red-600">{submitError}</p>}
             <button
               type="submit"
-              className="btn btn-primary flex-1"
+              className="btn btn-primary"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Salvando...' : mode === 'create' ? 'Criar Compromisso' : 'Atualizar Compromisso'}
@@ -246,7 +205,7 @@ export const EventForm = ({
             <button
               type="button"
               onClick={onClose}
-              className="btn btn-secondary flex-1"
+              className="btn btn-secondary"
             >
               Cancelar
             </button>

@@ -11,6 +11,7 @@ interface Event {
   category: string
   status: 'pending' | 'completed' | 'cancelled'
   calendarId?: string
+  color?: string
 }
 
 interface EventListProps {
@@ -71,7 +72,7 @@ export const EventList = ({
                 {event.start}
               </div>
 
-              {onEdit || onDelete || onToggleComplete && (
+              {(onEdit || onDelete || onToggleComplete) && (
                 <div className="ml-2 text-xs">
                   {onEdit && (
                     <button onClick={() => onEdit(event)} className="text-primary hover/underline">Editar</button>

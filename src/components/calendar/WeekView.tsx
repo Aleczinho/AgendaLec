@@ -1,105 +1,92 @@
-import { cn } from '@/lib/utils'
-import { format, startOfWeek, endOfWeek, eachDayOfWeek } from 'date-fns'
+import { eachDayOfInterval, endOfWeek, format, startOfWeek } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 interface WeekEvent {
+  id: string
   title: string
+  date: Date
   start: string
   end: string
   category: string
   allDay: boolean
+  color?: string
+  isRoutine?: boolean
+  scheduleType?: 'fixed' | 'flexible' | 'optional'
+  status?: string
 }
 
 interface WeekViewProps {
-  year: number
-  month: number
-  day: number
+  date: Date
   events: WeekEvent[]
+  weekStartsOn: 0 | 1
+  onSelectDay: (date: Date) => void
+  onCreateEvent: (date: Date) => void
   onEdit: (event: WeekEvent) => void
-  onDelete: (eventId: string) => void
 }
 
 export const WeekView = ({
-  year,
-  month,
-  day,
+  date,
   events,
+  weekStartsOn,
+  onSelectDay,
+  onCreateEvent,
   onEdit,
-  onDelete,
 }: WeekViewProps) => {
-  const start = startOfWeek(new Date(year, month - 1, day), { weekStartsOn: 1, locale: ptBR })
-  const end = endOfWeek(start, { weekStartsOn: 1, locale: ptBR })
-  const days = eachDayOfWeek(start, end, { weekStartsOn: 1, locale: ptBR })
-
-  const dayEvents = (date: Date) => {
-    return events.filter(event => {
-      const eventDate = new Date(event.start)
-      return eventDate >= start && eventDate <= end
-    })
-  }
+  const start = startOfWeek(date, { weekStartsOn })
+  const end = endOfWeek(date, { weekStartsOn })
+  const days = eachDayOfInterval({ start, end })
 
   return (
-    <div className="space-y-4">
-      <header className="flex items-center justify-between pb-3 border-b border-border">
-        <h2 className="text-xl font-bold">
-          {format(start, 'PPpp', { locale: ptBR })} - {format(end, 'PPpp', { locale: ptBR })}
-        </h2>
-
-        <button className="p-2 rounded-md hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-          +
-        </button>
+    <section className="week-calendar" aria-label="Visualização semanal">
+      <header className="calendar-view-heading">
+        <h2>{format(start, 'd MMM', { locale: ptBR })} – {format(end, 'd MMM yyyy', { locale: ptBR })}</h2>
       </header>
-
-      <div className="grid grid-cols-7 gap-1">
+      <div className="week-days">
         {days.map(day => {
-          const dayNum = day.getDate()
-          const dayEventList = dayEvents(day)
-          const hasEvents = dayEventList.length > 0
+          const dayEvents = events.filter(event =>
+            event.date.getFullYear() === day.getFullYear()
+            && event.date.getMonth() === day.getMonth()
+            && event.date.getDate() === day.getDate(),
+          )
 
           return (
-            <div
-              key={dayNum}
-              className={cn(
-                'h-24 w-12 rounded-md flex flex-col items-center justify-center border',
-                'border-border',
-                'bg-primary/5',
-                hasEvents ? 'ring-1 ring-accent/30' : '',
-                'cursor-pointer hover:bg-primary/10 transition-colors'
-              )}
-            >
-              <span className="text-xs font-medium">{dayNum}</span>
-              {hasEvents && (
-                <div className="w-0.5 h-0.5 rounded-full bg-accent absolute bottom-1 left-1" />
-              )}
-            </div>
+            <section className="week-day" key={day.toISOString()}>
+              <button
+                type="button"
+                className="week-day-heading"
+                onClick={() => onSelectDay(day)}
+                aria-label={`Ver ${format(day, 'EEEE, d MMMM', { locale: ptBR })}`}
+              >
+                <span>{format(day, 'EEE', { locale: ptBR })}</span>
+                <strong>{format(day, 'd')}</strong>
+              </button>
+              <div className="week-day-events">
+                {dayEvents.map(event => (
+                  <button
+                    type="button"
+                    className={`week-event${event.isRoutine ? ' week-event-routine' : ''}${event.status === 'possible' ? ' status-possible' : ''}`}
+                    key={event.id}
+                    onClick={() => onEdit(event)}
+                    style={{ borderInlineStartColor: event.color || 'var(--color-primary)' }}
+                  >
+                    <strong>{event.title}</strong>
+                    <span>{event.allDay ? 'Dia inteiro' : event.start}</span>
+                  </button>
+                ))}
+                {dayEvents.length === 0 && <span className="week-empty">Sem compromissos</span>}
+              </div>
+              <button
+                type="button"
+                className="week-add-event"
+                onClick={() => onCreateEvent(day)}
+                aria-label={`Adicionar compromisso em ${format(day, 'd MMMM', { locale: ptBR })}`}
+              >
+                + Adicionar
+              </button>
+            </section>
           )
         })}
       </div>
-
-      {events.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-border">
-          <h3 className="text-sm font-medium text-secondary uppercase tracking-wider mb-3">Eventos da semana</h3>
-          <div className="space-y-2">
-            {events.slice(0, 10).map((event, index) => (
-              <div
-                key={index}
-                className="flex items-start gap-2 p-2 rounded-lg bg-secondary/5"
-                style={{ backgroundColor: event.category.color }}
-              >
-                <div className="w-1 h-1 rounded-full" style={{ backgroundColor: event.category.color === 'green' ? '#10B981' : event.category.color === 'orange' ? '#F59E0B' : event.category.color === 'red' ? '#EF4444' : event.category.color === 'purple' ? '#A78BFA' : '#3B82F6' }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-secondary truncate">
-                    {event.title}
-                  </p>
-                  <p className="text-xs text-secondary">
-                    {event.allDay ? 'Todo dia' : `${event.start} - ${event.end}`}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </section>
   )
 }

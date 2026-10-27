@@ -1,67 +1,90 @@
-import { Outlet, Navigate } from 'react-router-dom'
-import { cn } from '@/lib/utils'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { CalendarDays, CalendarClock, LayoutDashboard, LogOut, Menu, Settings, X } from 'lucide-react'
+import { useAuth } from '@/app/providers/AuthProvider'
+
+const navigation = [
+  { to: '/overview', label: 'Visão geral', icon: LayoutDashboard },
+  { to: '/calendar', label: 'Calendário', icon: CalendarDays },
+  { to: '/routine', label: 'Rotina', icon: CalendarClock },
+  { to: '/settings', label: 'Configurações', icon: Settings },
+]
 
 const UserLayout = () => {
-  // Check if user is authenticated
-  const isAuthenticated = true // This would come from AuthContext
+  const { logout, displayName, email } = useAuth()
+  const navigate = useNavigate()
+  const [logoutError, setLogoutError] = useState('')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  if (!isAuthenticated) {
-    return <Navigate to="/" replace={true} />
+  const closeMenu = () => setMobileMenuOpen(false)
+  const handleLogout = async () => {
+    setLogoutError('')
+    try {
+      await logout()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      console.error('Unable to sign out:', error)
+      setLogoutError('Não foi possível encerrar a sessão. Tente novamente.')
+    }
   }
 
   return (
-    <div className="min-h-screen bg-bg dark:bg-gray-900">
-      {/* Sidebar */}
-      <aside className="w-64 bg-sidebar min-h-screen border-r border-border flex flex-col">
-        <div className="p-4 border-b border-border">
-          <h2 className="text-font-semibold">AgendaLec</h2>
-        </div>
+    <div className="app-shell">
+      <header className="mobile-topbar">
+        <NavLink to="/calendar" className="brand-lockup" onClick={closeMenu}>
+          <span className="brand-mark"><CalendarDays size={19} /></span>
+          <span>Agenda<span className="brand-accent">Lec</span></span>
+        </NavLink>
+        <button
+          type="button"
+          className="icon-button mobile-menu-toggle"
+          onClick={() => setMobileMenuOpen(open => !open)}
+          aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+          aria-expanded={mobileMenuOpen}
+        >
+          {mobileMenuOpen ? <X size={21} /> : <Menu size={21} />}
+        </button>
+      </header>
 
-        <nav className="flex-1 flex flex-col gap-2">
-          <a
-            href="/calendar"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-secondary hover:text-primary hover:bg-primary/5 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L5.05 4.05zm1.4 8.24l2.16 2.16a1 1 0 01-1.414 1.414L6.5 10.91l-1.98 1.98a1 1 0 01-1.414-1.414.75.75 0 000 1.06l1.83 1.83a1 1 0 01-1.06 1.414l-2.16 2.16a1 1 0 01-1.414-1.414.75.75 0 000-1.06l1.98-1.98a1 1 0 011.414 0l2.16-2.16a.75.75 0 001.06-1.414z" clipRule="evenodd" />
-            </svg>
-            Calendário
-          </a>
+      {mobileMenuOpen && <button className="mobile-menu-scrim" onClick={closeMenu} aria-label="Fechar menu" />}
+      <aside className={`app-sidebar${mobileMenuOpen ? ' is-open' : ''}`}>
+        <NavLink to="/calendar" className="brand-lockup desktop-brand" onClick={closeMenu}>
+          <span className="brand-mark"><CalendarDays size={19} /></span>
+          <span>Agenda<span className="brand-accent">Lec</span></span>
+        </NavLink>
 
-          <a
-            href="/agenda"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-secondary hover:text-primary hover:bg-primary/5 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L5.05 4.05zm1.4 8.24l2.16 2.16a1 1 0 01-1.414 1.414L6.5 10.91l-1.98 1.98a1 1 0 01-1.414-1.414.75.75 0 000 1.06l1.83 1.83a1 1 0 01-1.06 1.414l-2.16 2.16a1 1 0 01-1.414-1.414.75.75 0 000-1.06l1.98-1.98a1 1 0 011.414 0l2.16-2.16a.75.75 0 001.06-1.414z" clipRule="evenodd" />
-            </svg>
-            Agenda
-          </a>
-
-          <a
-            href="/calendars"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-secondary hover:text-primary hover:bg-primary/5 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L5.05 4.05zm1.4 8.24l2.16 2.16a1 1 0 01-1.414 1.414L6.5 10.91l-1.98 1.98a1 1 0 01-1.414-1.414.75.75 0 000 1.06l1.83 1.83a1 1 0 01-1.06 1.414l-2.16 2.16a1 1 0 01-1.414-1.414.75.75 0 000-1.06l1.98-1.98a1 1 0 011.414 0l2.16-2.16a.75.75 0 001.06-1.414z" clipRule="evenodd" />
-            </svg>
-            Agendas
-          </a>
-
-          <a
-            href="/settings"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-secondary hover:text-primary hover:bg-primary/5 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L5.05 4.05zm1.4 8.24l2.16 2.16a1 1 0 01-1.414 1.414L6.5 10.91l-1.98 1.98a1 1 0 01-1.414-1.414.75.75 0 000 1.06l1.83 1.83a1 1 0 01-1.06 1.414l-2.16 2.16a1 1 0 01-1.414-1.414.75.75 0 000-1.06l1.98-1.98a1 1 0 011.414 0l2.16-2.16a.75.75 0 001.06-1.414z" clipRule="evenodd" />
-            </svg>
-            Configurações
-          </a>
+        <div className="sidebar-section-label">MENU</div>
+        <nav className="sidebar-navigation" aria-label="Navegação principal">
+          {navigation.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              to={to}
+              key={to}
+              end={to === '/calendar'}
+              onClick={closeMenu}
+              className={({ isActive }) => `sidebar-link${isActive ? ' is-active' : ''}`}
+            >
+              <Icon size={19} strokeWidth={1.8} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
         </nav>
+
+        <div className="sidebar-account">
+          <div className="account-avatar" aria-hidden="true">
+            {(displayName || email || 'A').charAt(0).toUpperCase()}
+          </div>
+          <div className="account-details">
+            <strong>{displayName || 'Minha conta'}</strong>
+            <span>{email}</span>
+          </div>
+          <button type="button" className="icon-button logout-button" onClick={() => void handleLogout()} aria-label="Sair" title="Sair">
+            <LogOut size={18} />
+          </button>
+        </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 p-6 overflow-y-auto">
+      <main className="app-main">
+        {logoutError && <p role="alert" className="inline-error app-notice">{logoutError}</p>}
         <Outlet />
       </main>
     </div>

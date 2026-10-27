@@ -1,201 +1,173 @@
-import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { Select } from '@/components/ui/Select'
+import { useEffect, useState } from 'react'
+import { useTheme, type AccentPalette } from '@/app/providers/ThemeProvider'
+import { useCalendar } from '@/app/providers/CalendarProvider'
+import { supabase } from '@/lib/supabase'
 import { Card } from '@/components/ui/Card'
 
 interface SettingsPageProps {
   userId: string
 }
 
+type Theme = 'claro' | 'escuro' | 'automatico'
+type Preferences = {
+  firstDayOfWeek?: 'domingo' | 'segunda'
+  timeFormat?: '24h' | '12h'
+  calendarView?: 'mensal' | 'semanal' | 'diaria'
+  accentPalette?: AccentPalette
+  theme?: Theme
+  [key: string]: unknown
+}
+
 export const SettingsPage = ({ userId }: SettingsPageProps) => {
-  const [timezone, setTimezone] = useState('America/Fortaleza')
+  const { theme, setTheme, accentPalette, setAccentPalette } = useTheme()
+  const {
+    setWeekStartsOn,
+    setTimeFormat: setCalendarTimeFormat,
+    setDefaultCalendarView: applyDefaultCalendarView,
+  } = useCalendar()
+  const [selectedTheme, setSelectedTheme] = useState<Theme>(theme)
+  const [selectedPalette, setSelectedPalette] = useState<AccentPalette>(accentPalette)
   const [firstDayOfWeek, setFirstDayOfWeek] = useState<'domingo' | 'segunda'>('segunda')
-  const [theme, setTheme] = useState<'claro' | 'escuro' | 'automatico'>('automatico')
   const [timeFormat, setTimeFormat] = useState<'24h' | '12h'>('24h')
   const [calendarView, setCalendarView] = useState<'mensal' | 'semanal' | 'diaria'>('mensal')
-  const [defaultCalendar, setDefaultCalendar] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
 
-  // Load preferences from Supabase
   useEffect(() => {
-    // Mock data
-    setTimezone('America/Fortaleza')
-    setFirstDayOfWeek('segunda')
-    setTheme('automatico')
-    setTimeFormat('24h')
-    setCalendarView('mensal')
+    let active = true
+    const loadSettings = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('preferences')
+        .eq('id', userId)
+        .maybeSingle()
+      if (error) throw error
+      if (!active || !data) return
+
+      const preferences = (data.preferences ?? {}) as Preferences
+      if (preferences.theme && ['claro', 'escuro', 'automatico'].includes(preferences.theme)) {
+        setSelectedTheme(preferences.theme)
+      }
+      if (preferences.accentPalette && ['violeta', 'azul', 'verde', 'rosa', 'laranja'].includes(preferences.accentPalette)) {
+        setSelectedPalette(preferences.accentPalette)
+      }
+      if (preferences.firstDayOfWeek) {
+        setFirstDayOfWeek(preferences.firstDayOfWeek)
+      }
+      if (preferences.timeFormat === '12h' || preferences.timeFormat === '24h') setTimeFormat(preferences.timeFormat)
+      if (preferences.calendarView) setCalendarView(preferences.calendarView)
+    }
+
+    void loadSettings().catch(error => {
+      console.error('Unable to load preferences:', error)
+      if (active) setErrorMessage('Não foi possível carregar as configurações.')
+    })
+    return () => { active = false }
   }, [userId])
 
-  const handleSave = () => {
-    // Save preferences to Supabase
-    console.log('Preferences saved:', {
-      timezone,
-      firstDayOfWeek,
-      theme,
-      timeFormat,
-      calendarView,
-      defaultCalendar,
-    })
+  const handleSave = async () => {
+    setIsLoading(true)
+    setErrorMessage('')
+    setMessage('')
+
+    try {
+      const { data: profile, error: readError } = await supabase
+        .from('profiles')
+        .select('preferences')
+        .eq('id', userId)
+        .maybeSingle()
+      if (readError) throw readError
+
+      const preferences = {
+        ...((profile?.preferences ?? {}) as Preferences),
+        theme: selectedTheme,
+        accentPalette: selectedPalette,
+        firstDayOfWeek,
+        timeFormat,
+        calendarView,
+      }
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: userId, preferences }, { onConflict: 'id' })
+      if (error) throw error
+
+      setTheme(selectedTheme)
+      setAccentPalette(selectedPalette)
+      setWeekStartsOn(firstDayOfWeek === 'segunda' ? 1 : 0)
+      setCalendarTimeFormat(timeFormat)
+      applyDefaultCalendarView(calendarView)
+      setMessage('Preferências salvas.')
+    } catch (error) {
+      console.error('Unable to save preferences:', error)
+      setErrorMessage('Não foi possível salvar as configurações.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const timezoneOptions = [
-    { value: 'America/Fortaleza', label: 'Fortaleza (UTC-3)' },
-    { value: 'America/Sao_Paulo', label: 'São Paulo (UTC-3)' },
-    { value: 'UTC', label: 'UTC' },
-    { value: 'America/Noronha', label: 'Fernando de Noronha (UTC-3)' },
-    { value: 'America/Recife', label: 'Recife (UTC-3)' },
-    { value: 'America/Natal', label: 'Natal (UTC-3)' },
-    { value: 'America/Belem', label: 'Belém (UTC-3)' },
-  ]
-
-  const firstDayOptions = [
-    { value: 'domingo', label: 'Domingo' },
-    { value: 'segunda', label: 'Segunda-feira' },
-  ]
-
-  const timeFormatOptions = [
-    { value: '24h', label: '24 horas' },
-    { value: '12h', label: '12 horas' },
-  ]
-
-  const calendarViewOptions = [
-    { value: 'mensal', label: 'Mensal' },
-    { value: 'semanal', label: 'Semanal' },
-    { value: 'diaria', label: 'Diária' },
-  ]
-
   return (
-    <section className="p-6">
-      <header className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Configurações</h1>
-
-        <button onClick={() => window.history.back()} className="p-2 rounded-md hover:bg-gray-100 hover:text-gray-800 transition-colors">
-          ← Voltar
-        </button>
+    <section className="settings-page">
+      <header className="page-heading">
+        <div>
+          <p className="eyebrow">Personalize seu espaço</p>
+          <h1>Configurações</h1>
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Tema */}
-        <Card>
-          <h2 className="text-sm font-medium text-secondary uppercase tracking-wider mb-3">Aparência</h2>
+      {errorMessage && <p role="alert" className="mb-4 text-sm text-red-600">{errorMessage}</p>}
+      {message && <p role="status" className="mb-4 text-sm text-green-700">{message}</p>}
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm text-secondary mb-1">Tema</label>
-              <select
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as any)}
-                className="select select-sm w-full"
-              >
-                <option value="automatico">Automático</option>
-                <option value="claro">Claro</option>
-                <option value="escuro">Escuro</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm text-secondary mb-1">Fuso Horário</label>
-              <select
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="select select-sm w-full"
-              >
-                {timezoneOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm text-secondary mb-1">Formato de Horário</label>
-              <select
-                value={timeFormat}
-                onChange={(e) => setTimeFormat(e.target.value as any)}
-                className="select select-sm w-full"
-              >
-                <option value="24h">24 horas</option>
-                <option value="12h">12 horas</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm text-secondary mb-1">Primeiro Dia da Semana</label>
-              <select
-                value={firstDayOfWeek}
-                onChange={(e) => setFirstDayOfWeek(e.target.value as any)}
-                className="select select-sm w-full"
-              >
-                <option value="domingo">Domingo</option>
-                <option value="segunda">Segunda-feira</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm text-secondary mb-1">Visualização Padrão do Calendário</label>
-              <select
-                value={calendarView}
-                onChange={(e) => setCalendarView(e.target.value as any)}
-                className="select select-sm w-full"
-              >
-                <option value="mensal">Mensal</option>
-                <option value="semanal">Semanal</option>
-                <option value="diaria">Diária</option>
-              </select>
-            </div>
-          </div>
+      <div className="settings-layout">
+        <Card className="space-y-4 p-4">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-secondary">Aparência e calendário</h2>
+          <label className="block text-sm text-secondary">
+            Tema
+            <select className="select select-sm mt-1 w-full" value={selectedTheme} onChange={event => setSelectedTheme(event.target.value as Theme)}>
+              <option value="automatico">Automático</option>
+              <option value="claro">Claro</option>
+              <option value="escuro">Escuro</option>
+            </select>
+          </label>
+          <label className="block text-sm text-secondary">
+            Cor principal
+            <select className="select select-sm mt-1 w-full" value={selectedPalette} onChange={event => setSelectedPalette(event.target.value as AccentPalette)}>
+              <option value="violeta">Violeta</option>
+              <option value="azul">Azul</option>
+              <option value="verde">Verde</option>
+              <option value="rosa">Rosa</option>
+              <option value="laranja">Laranja</option>
+            </select>
+          </label>
+          <label className="block text-sm text-secondary">
+            Formato de horário
+            <select className="select select-sm mt-1 w-full" value={timeFormat} onChange={event => setTimeFormat(event.target.value as '24h' | '12h')}>
+              <option value="24h">24 horas</option>
+              <option value="12h">12 horas</option>
+            </select>
+          </label>
+          <label className="block text-sm text-secondary">
+            Primeiro dia da semana
+            <select className="select select-sm mt-1 w-full" value={firstDayOfWeek} onChange={event => setFirstDayOfWeek(event.target.value as 'domingo' | 'segunda')}>
+              <option value="domingo">Domingo</option>
+              <option value="segunda">Segunda-feira</option>
+            </select>
+          </label>
+          <label className="block text-sm text-secondary">
+            Visualização padrão
+            <select className="select select-sm mt-1 w-full" value={calendarView} onChange={event => setCalendarView(event.target.value as 'mensal' | 'semanal' | 'diaria')}>
+              <option value="mensal">Mensal</option>
+              <option value="semanal">Semanal</option>
+              <option value="diaria">Diária</option>
+            </select>
+          </label>
         </Card>
 
-        {/* Agenda Padrão */}
-        <Card>
-          <h2 className="text-sm font-medium text-secondary uppercase tracking-wider mb-3">Agenda Padrão</h2>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm text-secondary mb-1">Agenda Padrão</label>
-              <select
-                value={defaultCalendar || ''}
-                onChange={(e) => setDefaultCalendar(e.target.value || null)}
-                className="select select-sm w-full"
-              >
-                <option value="">Nenhuma</option>
-                <option value="1">Rotina Pessoal</option>
-                <option value="2">Escola e Estágio</option>
-                <option value="3">Igreja</option>
-                <option value="4">Estudos</option>
-                <option value="5">Academia</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm text-secondary mb-1">Exportar Dados</label>
-              <p className="text-xs text-secondary mb-2">
-                Selecione abaixo para exportar seus dados:
-              </p>
-
-              <div className="flex gap-2">
-                <button className="flex-1 btn btn-ghost btn-sm text-sm text-primary hover:text-primary">
-                  CSV
-                </button>
-                <button className="flex-1 btn btn-ghost btn-sm text-sm text-secondary hover:text-secondary">
-                  .ics
-                </button>
-              </div>
-            </div>
-          </div>
-        </Card>
       </div>
 
-      <div className="mt-8 pt-8 border-t border-border">
-        <button
-          onClick={handleSave}
-          className="btn btn-primary w-full"
-        >
-          Salvar Preferências
-        </button>
-      </div>
+      <button onClick={() => void handleSave()} className="btn btn-primary mt-8 w-full" disabled={isLoading}>
+        {isLoading ? 'Salvando...' : 'Salvar Preferências'}
+      </button>
     </section>
   )
 }

@@ -1,9 +1,11 @@
-import { cn } from '@/lib/utils'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { formatDateInput, isValidDateInput, maskDateInput, parseDateInput } from '@/lib/dateInput'
+
+type RecurrenceFrequency = 'none' | 'daily' | 'weekly' | 'monthly'
 
 interface RecurrenceConfigProps {
   mode: 'create' | 'edit'
-  initialFrequency?: string
+  initialFrequency?: RecurrenceFrequency
   onFrequencyChange: (frequency: string) => void
   onStartDateChange: (date: Date) => void
   onEndDate?: (date: Date) => void
@@ -18,36 +20,36 @@ export const RecurrenceConfig = ({
   onEndDate,
   onExceptionAction,
 }: RecurrenceConfigProps) => {
-  const [frequency, setFrequency] = useState<'none' | 'daily' | 'weekly' | 'monthly'>(
+  const [frequency, setFrequency] = useState<RecurrenceFrequency>(
     initialFrequency || 'none'
   )
-  const [startDate, setStartDate] = useState<Date>(new Date())
-  const [endDate, setEndDate] = useState<Date | null>(null)
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date()
+    return formatDateInput(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())))
+  })
+  const [endDate, setEndDate] = useState('')
 
-  // Calculate end date for weekly recurrence (3 months by default)
-  const calculateDefaultEndDate = () => {
-    const defaultEnd = new Date()
-    defaultEnd.setMonth(defaultEnd.getMonth() + 3)
-    return defaultEnd
-  }
+  useEffect(() => {
+    if (mode === 'edit' && initialFrequency) setFrequency(initialFrequency)
+  }, [initialFrequency, mode])
 
-  if (mode === 'edit' && initialFrequency) {
-    setFrequency(initialFrequency)
-  }
-
-  const handleFrequencyChange = (value: string) => {
-    setFrequency(value as any)
+  const handleFrequencyChange = (value: RecurrenceFrequency) => {
+    setFrequency(value)
     onFrequencyChange(value)
   }
 
-  const handleStartDateChange = (date: Date) => {
-    setStartDate(date)
-    onStartDateChange(date)
+  const handleStartDateChange = (value: string) => {
+    const maskedValue = maskDateInput(value)
+    setStartDate(maskedValue)
+    const date = parseDateInput(maskedValue)
+    if (date) onStartDateChange(date)
   }
 
-  const handleEndDateChange = (date: Date) => {
-    setEndDate(date)
-    if (onEndDate) onEndDate(date)
+  const handleEndDateChange = (value: string) => {
+    const maskedValue = maskDateInput(value)
+    setEndDate(maskedValue)
+    const date = maskedValue ? parseDateInput(maskedValue) : null
+    if (date && onEndDate) onEndDate(date)
   }
 
   return (
@@ -61,7 +63,7 @@ export const RecurrenceConfig = ({
           <label className="block text-xs text-secondary mb-1">Frequência</label>
           <select
             value={frequency}
-            onChange={(e) => handleFrequencyChange(e.target.value)}
+            onChange={(e) => handleFrequencyChange(e.target.value as RecurrenceFrequency)}
             className="select select-sm w-full"
           >
             <option value="none">Não recorrente</option>
@@ -76,22 +78,30 @@ export const RecurrenceConfig = ({
             <div>
               <label className="block text-xs text-secondary mb-1">Data de início</label>
               <input
-                type="date"
-                value={startDate.toISOString().split('T')[0]}
-                onChange={(e) => handleStartDateChange(new Date(e.target.value))}
-                className="input input-sm w-full"
+                type="text"
+                inputMode="numeric"
+                placeholder="dd/mm/aa"
+                value={startDate}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                className={`input input-sm w-full${isValidDateInput(startDate) ? '' : ' border-red-500'}`}
+                aria-invalid={!isValidDateInput(startDate)}
               />
+              {!isValidDateInput(startDate) && <p role="alert" className="text-sm text-red-600">Use o formato dd/mm/aa.</p>}
             </div>
 
             {onEndDate && (
               <div>
                 <label className="block text-xs text-secondary mb-1">Data final</label>
                 <input
-                  type="date"
-                  value={endDate?.toISOString().split('T')[0] || ''}
-                  onChange={(e) => handleEndDateChange(new Date(e.target.value))}
-                  className="input input-sm w-full"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="dd/mm/aa"
+                  value={endDate}
+                  onChange={(e) => handleEndDateChange(e.target.value)}
+                  className={`input input-sm w-full${!endDate || isValidDateInput(endDate) ? '' : ' border-red-500'}`}
+                  aria-invalid={Boolean(endDate) && !isValidDateInput(endDate)}
                 />
+                {endDate && !isValidDateInput(endDate) && <p role="alert" className="text-sm text-red-600">Use o formato dd/mm/aa.</p>}
               </div>
             )}
           </>

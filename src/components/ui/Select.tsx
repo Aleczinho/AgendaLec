@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface Option {
@@ -6,9 +7,10 @@ interface Option {
   disabled?: boolean
 }
 
-interface SelectProps extends React.HTMLAttributes<HTMLSelectElement> {
+interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'value' | 'onChange' | 'onSelect' | 'size'> {
   options: Option[]
   value?: string | number
+  onChange?: React.ChangeEventHandler<HTMLSelectElement>
   onSelect?: (value: string | number) => void
   placeholder?: string
   searchable?: boolean
@@ -16,7 +18,7 @@ interface SelectProps extends React.HTMLAttributes<HTMLSelectElement> {
   size?: 'sm' | 'md'
 }
 
-const Select = React.forwardRef<HTMLSelectElement, SelectProps>(props => {
+const Select = forwardRef<HTMLSelectElement, SelectProps>((props, ref) => {
   const {
     options,
     value,
@@ -24,35 +26,26 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(props => {
     placeholder,
     searchable = false,
     error,
+    size = 'md',
+    onChange,
     className,
     ...attrs
   } = props
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedValue = e.target.value
-    if (onSelect) onSelect(selectedValue)
+    onChange?.(e)
+    if (onSelect) onSelect(e.target.value)
   }
-
-  const renderedOptions = options.map(option => {
-    const isDisabled = option.disabled
-    return (
-      <option
-        key={option.value}
-        value={option.value.toString()}
-        disabled={isDisabled}
-        selected={option.value === value}
-      >
-        {option.label}
-      </option>
-    )
-  })
 
   return (
     <div className="space-y-1">
       <select
+        ref={ref}
         {...attrs}
+        value={value}
         className={cn(
           'select',
+          size === 'sm' && 'select-sm',
           searchable && 'pr-8', // space for search icon
           error && 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20',
           className,
@@ -60,7 +53,15 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(props => {
         onChange={handleChange}
       >
         {placeholder && <option value="" disabled>{placeholder}</option>}
-        {renderedOptions}
+        {options.map(option => (
+          <option
+            key={option.value}
+            value={option.value.toString()}
+            disabled={option.disabled}
+          >
+            {option.label}
+          </option>
+        ))}
       </select>
       {error && (
         <p className="text-sm text-red-600">{error}</p>
@@ -71,4 +72,5 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(props => {
 
 Select.displayName = 'Select'
 
-export { Select, SelectProps }
+export { Select }
+export type { SelectProps }

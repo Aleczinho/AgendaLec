@@ -13,7 +13,7 @@ export const Indicator = ({
   value,
   icon,
   className,
-  trend,
+  trend = 'neutral',
 }: IndicatorProps) => {
   const trendClass = {
     up: 'text-green-600',

@@ -1,12 +1,20 @@
-import { cn } from '@/lib/utils'
+import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+import { Check, MapPin, Pencil, Trash2 } from 'lucide-react'
 
 interface DayEvent {
+  id: string
   title: string
+  date: Date
   start: string
   end: string
   category: string
   location?: string
   allDay: boolean
+  color?: string
+  status?: string
+  isRoutine?: boolean
+  scheduleType?: 'fixed' | 'flexible' | 'optional'
 }
 
 interface DayViewProps {
@@ -15,6 +23,7 @@ interface DayViewProps {
   onEdit: (event: DayEvent) => void
   onDelete: (eventId: string) => void
   onToggleComplete: (eventId: string) => void
+  onCreateEvent: (date: Date) => void
 }
 
 export const DayView = ({
@@ -23,80 +32,65 @@ export const DayView = ({
   onEdit,
   onDelete,
   onToggleComplete,
+  onCreateEvent,
 }: DayViewProps) => {
-  const sortedEvents = [...events].sort((a, b) => {
-    return a.start.localeCompare(b.start)
-  })
+  const sortedEvents = [...events].sort((a, b) => a.start.localeCompare(b.start))
 
   return (
-    <div className="space-y-4">
-      <header className="flex items-center justify-between pb-3 border-b border-border">
-        <h2 className="text-xl font-bold">
-          {date.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </h2>
-
-        <button className="p-2 rounded-md hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-          +
+    <section className="day-calendar" aria-label="Visualização diária">
+      <header className="calendar-view-heading">
+        <h2>{format(date, 'EEEE, d MMMM yyyy', { locale: ptBR })}</h2>
+        <button type="button" className="btn btn-primary" onClick={() => onCreateEvent(date)}>
+          Adicionar compromisso
         </button>
       </header>
 
       {sortedEvents.length === 0 ? (
-        <p className="text-secondary text-sm py-8 text-center">
-          Nenhum compromisso neste dia
-        </p>
+        <div className="calendar-empty">
+          <p>Nenhum compromisso neste dia.</p>
+          <button type="button" className="btn btn-secondary" onClick={() => onCreateEvent(date)}>
+            Criar primeiro compromisso
+          </button>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
-          {sortedEvents.map((event, index) => (
-            <div
-              key={index}
-              className="p-3 rounded-lg border border-border flex flex-col gap-2 min-h-[80px]"
-              style={{ backgroundColor: event.category.color }}
-            >
-              <div className="flex items-start justify-between">
-                <h3 className="font-medium text-white line-clamp-1 line-clamp-{event.allDay ? 2 : 3}">
-                  {event.title}
-                </h3>
-
-                <small className="text-xs text-white/80">
-                  {event.allDay ? 'Todo dia' : `${event.start} - ${event.end}`}
-                </small>
+        <div className="day-event-list">
+          {sortedEvents.map(event => (
+            <article className={`day-event${event.isRoutine ? ' day-event-routine' : ''}`} key={event.id}>
+              <span className="day-event-color" style={{ backgroundColor: event.color || 'var(--color-primary)' }} />
+              <div className="day-event-time">{event.allDay ? 'Dia inteiro' : `${event.start}${event.end ? ` – ${event.end}` : ''}`}</div>
+              <div className="day-event-content">
+                <h3>{event.title}</h3>
+                {event.category && <p>{event.category}{event.isRoutine && event.scheduleType ? ` · ${event.scheduleType === 'fixed' ? 'Rotina fixa' : event.scheduleType === 'flexible' ? 'Rotina flexível' : 'Rotina opcional'}` : ''}</p>}
+                {event.location && <p className="day-event-location"><MapPin size={14} />{event.location}</p>}
               </div>
-
-              <p className="text-xs text-white/70 line-clamp-1">
-                {event.location || ''}
-              </p>
-
-              <div className="flex items-center gap-2 mt-auto">
-                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: event.category.color === 'green' ? '#10B981' : event.category.color === 'orange' ? '#F59E0B' : event.category.color === 'red' ? '#EF4444' : event.category.color === 'purple' ? '#A78BFA' : '#3B82F6' }} />
-
-                <button
-                  onClick={() => onEdit(event)}
-                  className="text-xs text-white/70 hover:text-white transition-colors"
-                  title="Editar"
-                >
-                  ✎
-                </button>
-
-                <button
-                  onClick={() => onToggleComplete(event.title)}
-                  className="text-xs text-green-400 hover:text-green-300 transition-colors"
-                  title="Concluir"
-                >
-                  ✓
-                </button>
-
-                <button
-                  onClick={() => onDelete(event.title)}
-                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
-                  title="Excluir"
-                >
-                  ✕
-                </button>
+              <div className="day-event-actions">
+                {event.isRoutine ? (
+                  <button type="button" onClick={() => onEdit(event)} aria-label={`Editar ${event.title} na rotina`} title="Editar na rotina">
+                    <Pencil size={16} />
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => onEdit(event)} aria-label={`Editar ${event.title}`} title="Editar">
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onToggleComplete(event.id)}
+                      aria-label={event.status === 'completed' ? `Reabrir ${event.title}` : `Concluir ${event.title}`}
+                      title={event.status === 'completed' ? 'Reabrir' : 'Concluir'}
+                    >
+                      <Check size={17} />
+                    </button>
+                    <button type="button" onClick={() => onDelete(event.id)} aria-label={`Excluir ${event.title}`} title="Excluir">
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                )}
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}
-    </div>
+    </section>
   )
 }

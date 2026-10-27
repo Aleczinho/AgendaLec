@@ -1,15 +1,29 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { supabase, supabaseConfigured } from '@/lib/supabase'
 
-import { supabase } from '@/lib/supabase'
+type Theme = 'claro' | 'escuro' | 'automatico'
+export type AccentPalette = 'violeta' | 'azul' | 'verde' | 'rosa' | 'laranja'
 
 interface ThemeContextValue {
-  theme: 'claro' | 'escuro' | 'automatico'
-  setTheme: (theme: 'claro' | 'escuro' | 'automatico') => void
+  theme: Theme
+  setTheme: (theme: Theme) => void
+  accentPalette: AccentPalette
+  setAccentPalette: (palette: AccentPalette) => void
   prefersDark: boolean
-  savedTheme: 'claro' | 'escuro' | 'automatico' | null
+  savedTheme: Theme | null
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
+
+const isTheme = (value: unknown): value is Theme =>
+  value === 'claro' || value === 'escuro' || value === 'automatico'
+const isAccentPalette = (value: unknown): value is AccentPalette =>
+  value === 'violeta' || value === 'azul' || value === 'verde' || value === 'rosa' || value === 'laranja'
+
+const storedTheme = (): Theme | null => {
+  const value = localStorage.getItem('agendalec_theme')
+  return isTheme(value) ? value : null
+}
 
 export const useTheme = () => {
   const context = useContext(ThemeContext)
@@ -19,168 +33,104 @@ export const useTheme = () => {
   return context
 }
 
-export const ThemeProvider = ({
-  children,
-}: { children: React.ReactNode }) => {
-  const [theme, setTheme] = useState<'claro' | 'escuro' | 'automatico'>('automatico')
-  let [prefersDark, setPrefersDark] = useState(false)
-  const [savedTheme, setSavedTheme] = useState<'claro' | 'escuro' | 'automatico' | null>(null)
+export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const [theme, setTheme] = useState<Theme>('automatico')
+  const [accentPalette, setAccentPalette] = useState<AccentPalette>('violeta')
+  const [prefersDark, setPrefersDark] = useState(false)
+  const [savedTheme, setSavedTheme] = useState<Theme | null>(null)
+  const [hasLoadedTheme, setHasLoadedTheme] = useState(false)
 
-  // Verificar preferência salva no Supabase ou localStorage
   useEffect(() => {
-    const loadSavedTheme = async () => {
-      if (!supabase) {
-        // Fallback para localStorage se Supabase não configurado
-        const stored = localStorage.getItem('agendalec_theme')
-        if (stored) {
-          setSavedTheme(stored as any)
-          setTheme(stored as any)
-        }
-        return
-      }
-
+    let active = true
+    const loadTheme = async () => {
       try {
-        // Tentar obter usuário atual
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
-        
-        if (userError || !user) {
-          // Sem usuário logado, usar localStorage
-          const stored = localStorage.getItem('agendalec_theme')
-          if (stored) {
-            setSavedTheme(stored as any)
-            setTheme(stored as any)
+        if (!supabaseConfigured) {
+          const selectedTheme = storedTheme() ?? 'automatico'
+          const selectedPalette = localStorage.getItem('agendalec_palette')
+          if (active) {
+            setTheme(selectedTheme)
+            if (isAccentPalette(selectedPalette)) setAccentPalette(selectedPalette)
+            setSavedTheme(selectedTheme)
           }
           return
         }
 
-        // Buscar preferência no banco do usuário
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('preferences')
-          .eq('id', user.id)
-          .single()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        if (sessionError) throw sessionError
 
-        if (profile && profile.preferences?.theme) {
-          setSavedTheme(profile.preferences.theme as any)
-          setTheme(profile.preferences.theme as any)
-        } else {
-          // Definir tema padrão e salvar
-          const defaultTheme: 'claro' | 'escuro' | 'automatico' = 'automatico'
-          setTheme(defaultTheme)
-          setSavedTheme(defaultTheme)
-          
-          await supabase
+        if (session?.user) {
+          const { data, error } = await supabase
             .from('profiles')
-            .upsert({
-              id: user.id,
-              preferences: { theme: defaultTheme },
-            }, { onConflict: 'id' })
+            .select('preferences')
+            .eq('id', session.user.id)
+            .maybeSingle()
+          if (error) throw error
+
+          const preferenceTheme = data?.preferences?.theme
+          const selectedTheme = isTheme(preferenceTheme) ? preferenceTheme : storedTheme() ?? 'automatico'
+          const preferencePalette = data?.preferences?.accentPalette
+          const storedPalette = localStorage.getItem('agendalec_palette')
+          if (active) {
+            setTheme(selectedTheme)
+            if (isAccentPalette(preferencePalette)) setAccentPalette(preferencePalette)
+            else if (isAccentPalette(storedPalette)) setAccentPalette(storedPalette)
+            setSavedTheme(selectedTheme)
+          }
+        } else {
+          const selectedTheme = storedTheme() ?? 'automatico'
+          const selectedPalette = localStorage.getItem('agendalec_palette')
+          if (active) {
+            setTheme(selectedTheme)
+            if (isAccentPalette(selectedPalette)) setAccentPalette(selectedPalette)
+            setSavedTheme(selectedTheme)
+          }
         }
-      } catch (err) {
-        console.error('Error loading theme:', err)
-        // Fallback para localStorage
-        const stored = localStorage.getItem('agendalec_theme')
-        if (stored) {
-          setSavedTheme(stored as any)
-          setTheme(stored as any)
+      } catch (error) {
+        console.error('Unable to load the theme preference:', error)
+        const selectedTheme = storedTheme() ?? 'automatico'
+        const selectedPalette = localStorage.getItem('agendalec_palette')
+        if (active) {
+          setTheme(selectedTheme)
+          if (isAccentPalette(selectedPalette)) setAccentPalette(selectedPalette)
+          setSavedTheme(selectedTheme)
         }
+      } finally {
+        if (active) setHasLoadedTheme(true)
       }
     }
 
-    loadSavedTheme()
+    void loadTheme()
+    return () => { active = false }
   }, [])
 
-  // Aplicar tema e salvar preferência
-  useEffect(() => {
-    const root = document.documentElement
-
-    const applyTheme = () => {
-      if (theme === 'automatico') {
-        root.classList.remove('light', 'dark')
-        if (prefersDark) {
-          root.classList.add('dark')
-        } else {
-          root.classList.add('light')
-        }
-      } else if (theme === 'claro') {
-        root.classList.remove('dark', 'light')
-        root.classList.add('light')
-      } else if (theme === 'escuro') {
-        root.classList.remove('light', 'dark')
-        root.classList.add('dark')
-      }
-    }
-
-    applyTheme()
-
-    // Atualizar quando mudar
-    const listener = () => {
-      prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      applyTheme()
-    }
-
-    const resizeListener = () => applyTheme()
-
-    window.addEventListener('resize', resizeListener)
-    window.addEventListener('orientationchange', resizeListener)
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', listener)
-
-    // Salvar no Supabase se houver usuário
-    const saveThemePreference = async () => {
-      if (!supabase) return
-      
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          await supabase
-            .from('profiles')
-            .upsert({
-              id: user.id,
-              preferences: { theme },
-            }, { onConflict: 'id' })
-        }
-      } catch (err) {
-        console.error('Error saving theme:', err)
-      }
-    }
-
-    saveThemePreference()
-
-    return () => {
-      window.removeEventListener('resize', resizeListener)
-      window.removeEventListener('orientationchange', resizeListener)
-      window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', listener)
-    }
-  }, [theme, prefersDark])
-
-  // Observer para mudanças de esquema de cor do sistema
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     setPrefersDark(mediaQuery.matches)
+    const onChange = (event: MediaQueryListEvent) => setPrefersDark(event.matches)
+    mediaQuery.addEventListener('change', onChange)
+    return () => mediaQuery.removeEventListener('change', onChange)
+  }, [])
 
-    const handleChange = (e: MediaQueryListEvent) => {
-      setPrefersDark(e.matches)
-      if (theme === 'automatico') {
-        const root = document.documentElement
-        if (e.matches) {
-          root.classList.add('dark')
-          root.classList.remove('light')
-        } else {
-          root.classList.remove('dark')
-          root.classList.add('light')
-        }
-      }
-    }
+  useEffect(() => {
+    const root = document.documentElement
+    const useDark = theme === 'escuro' || (theme === 'automatico' && prefersDark)
+    root.classList.toggle('dark', useDark)
+    root.classList.toggle('light', !useDark)
+  }, [prefersDark, theme])
 
-    mediaQuery.addEventListener?.('change', handleChange)
+  useEffect(() => {
+    document.documentElement.dataset.palette = accentPalette
+  }, [accentPalette])
 
-    return () => {
-      mediaQuery.removeEventListener?.('change', handleChange)
-    }
-  }, [theme])
+  useEffect(() => {
+    if (!hasLoadedTheme) return
+    localStorage.setItem('agendalec_theme', theme)
+    localStorage.setItem('agendalec_palette', accentPalette)
+    setSavedTheme(theme)
+  }, [accentPalette, hasLoadedTheme, theme])
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, prefersDark, savedTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, accentPalette, setAccentPalette, prefersDark, savedTheme }}>
       {children}
     </ThemeContext.Provider>
   )

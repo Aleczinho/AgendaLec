@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -7,12 +8,13 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   className?: string
 }
 
-const Card = React.forwardRef<HTMLDivElement, CardProps>(props => {
+const Card = forwardRef<HTMLDivElement, CardProps>((props, ref) => {
   const {
     variant = 'default',
     hasHeader = false,
     hasFooter = false,
     className,
+    children,
     ...attrs
   } = props
 
@@ -20,12 +22,16 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(props => {
 
   return (
     <div
+      ref={ref}
       className={cn(baseClasses, className)}
       {...attrs}
-    )
+    >
+      {children}
+    </div>
   )
 })
 
 Card.displayName = 'Card'
 
-export { Card, CardProps }
+export { Card }
+export type { CardProps }

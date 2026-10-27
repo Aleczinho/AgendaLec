@@ -1,12 +1,12 @@
+import { forwardRef } from 'react'
 import { cn } from '@/lib/utils'
 
-interface InputProps extends React.LabelHTMLAttributes<HTMLInputElement> {
-  type?: string
+interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   size?: 'sm' | 'md' | 'lg'
   error?: string
 }
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(props => {
+const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => {
   const {
     type,
     size = 'md',
@@ -24,6 +24,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(props => {
   return (
     <div className="space-y-1">
       <input
+        ref={ref}
         type={type}
         className={cn(
           'input',
@@ -42,4 +43,5 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(props => {
 
 Input.displayName = 'Input'
 
-export { Input, InputProps }
+export { Input }
+export type { InputProps }

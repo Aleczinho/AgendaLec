@@ -1,7 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-
-import { supabase } from '@/lib/supabase'
-import { User } from '@supabase/supabase-js'
+import { createContext, useContext, useEffect, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
+import { assertSupabaseConfigured, supabase, supabaseConfigured } from '@/lib/supabase'
 
 interface AuthContextValue {
   isAuthenticated: boolean
@@ -11,7 +10,7 @@ interface AuthContextValue {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string) => Promise<boolean>
   resetPassword: (email: string) => Promise<void>
 }
 
@@ -25,154 +24,130 @@ export const useAuth = () => {
   return context
 }
 
-export const AuthProvider = ({
-  children,
-}: { children: React.ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
-  const [email, setEmail] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Verifica estado de auth ao montar
   useEffect(() => {
-    const getSession = async () => {
-      const { data, error } = await supabase.auth.getSession()
-      if (error) console.error('Error getting session:', error)
-      setIsAuthenticated(!!data.session)
-      
-      if (data.session?.user) {
-        const user = data.session.user as User
-        setUser(user)
-        setEmail(user.email ?? null)
-        // Buscar perfil do usuário
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('id', user.id)
-          .single()
-        
-        if (profile) {
-          setDisplayName(profile.display_name)
-        }
-      }
+    if (!supabaseConfigured) {
       setLoading(false)
+      return
     }
 
-    getSession()
+    let active = true
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
 
-    // Ouvinte para mudanças de auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setIsAuthenticated(!!session)
-        if (session?.user) {
-          const user = session.user as User
-          setUser(user)
-          setEmail(user.email ?? null)
-          
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('display_name')
-            .eq('id', user.id)
-            .single()
-          
-          if (profile) {
-            setDisplayName(profile.display_name)
-          }
-        } else {
-          setUser(null)
-          setDisplayName(null)
-          setEmail(null)
-          setLoading(false)
-        }
-      }
-    )
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (error) throw error
+        if (active) setUser(data.session?.user ?? null)
+      })
+      .catch(error => {
+        console.error('Unable to restore the authentication session:', error)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
 
     return () => {
-      subscription?.unsubscribe()
+      active = false
+      subscription.unsubscribe()
     }
   }, [])
 
+  useEffect(() => {
+    if (!user) {
+      setDisplayName(null)
+      return
+    }
+
+    let active = true
+    const loadProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (error) throw error
+        if (active) {
+          setDisplayName(data?.display_name ?? user.email?.split('@')[0] ?? null)
+        }
+      } catch (error) {
+        console.error('Unable to load the user profile:', error)
+        if (active) setDisplayName(user.email?.split('@')[0] ?? null)
+      }
+    }
+
+    void loadProfile()
+
+    return () => {
+      active = false
+    }
+  }, [user])
+
   const login = async (email: string, password: string) => {
+    assertSupabaseConfigured()
     setLoading(true)
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email, password,
-    })
-
-    if (error) {
-      console.error('Login error:', error.message)
-      throw error
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+    } finally {
+      setLoading(false)
     }
-
-    if (data.session?.user) {
-      const user = data.session.user as User
-      setUser(user)
-      setEmail(user.email ?? null)
-      setIsAuthenticated(true)
-      
-      // Criar ou atualizar perfil
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          display_name: user.email?.split('@')[0] || 'Usuário',
-        }, { onConflict: 'id' })
-
-      if (profileError) console.error('Profile error:', profileError)
-    }
-
-    setLoading(false)
   }
 
   const logout = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) console.error('Logout error:', error.message)
-
-    setIsAuthenticated(false)
-    setUser(null)
-    setDisplayName(null)
-    setEmail(null)
+    assertSupabaseConfigured()
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const signUp = async (email: string, password: string) => {
+    assertSupabaseConfigured()
     setLoading(true)
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-    })
-
-    if (error) {
-      console.error('Signup error:', error.message)
-      throw error
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) throw error
+      if (data.session) setUser(data.session.user)
+      return data.session !== null
+    } finally {
+      setLoading(false)
     }
-
-    if (data.user) {
-      const user = data.user as User
-      setUser(user)
-      setEmail(user.email ?? null)
-      setIsAuthenticated(true)
-      
-      // Criar perfil inicial
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          display_name: user.email?.split('@')[0] || 'Usuário',
-        }, { onConflict: 'id' })
-
-      if (profileError) console.error('Profile error:', profileError)
-    }
-
-    setLoading(false)
   }
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email)
-    if (error) console.error('Reset password error:', error.message)
+    assertSupabaseConfigured()
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    })
+    if (error) throw error
   }
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, user, displayName, email, loading, login, logout, signUp, resetPassword }}
+      value={{
+        isAuthenticated: user !== null,
+        user,
+        displayName,
+        email: user?.email ?? null,
+        loading,
+        login,
+        logout,
+        signUp,
+        resetPassword,
+      }}
     >
       {children}
     </AuthContext.Provider>

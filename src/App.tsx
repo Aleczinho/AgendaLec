@@ -1,101 +1,59 @@
-import './styles/tokens.css'
-import './styles/global.css'
-import './styles/components.css'
-import './styles/responsive.css'
-import { ThemeProvider } from '@/app/providers/ThemeProvider'
-import { AuthProvider } from '@/app/providers/AuthProvider'
+import { lazy, Suspense } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
 import { CalendarProvider } from '@/app/providers/CalendarProvider'
-import DashboardLayout from '@/app/layouts/UserLayout'
+import { ThemeProvider } from '@/app/providers/ThemeProvider'
 import AuthLayout from '@/app/layouts/AuthLayout'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@/app/providers/AuthProvider'
+import UserLayout from '@/app/layouts/UserLayout'
 
-function App() {
-  const navigate = useNavigate()
-  const { isAuthenticated, user } = useAuth()
+const CalendarPage = lazy(() => import('@/pages/CalendarPage').then(module => ({ default: module.CalendarPage })))
+const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(module => ({ default: module.DashboardPage })))
+const LoginPage = lazy(() => import('@/pages/LoginPage').then(module => ({ default: module.LoginPage })))
+const RoutinePage = lazy(() => import('@/pages/RoutinePage').then(module => ({ default: module.default })))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage').then(module => ({ default: module.SettingsPage })))
 
-  // Redirecionar usuários não autenticados para login
-  useEffect(() => {
-    if (!isAuthenticated && !user) {
-      navigate('/login', { replace: true })
-    }
-  }, [isAuthenticated, user])
+const AppRoutes = () => {
+  const { isAuthenticated, loading, user } = useAuth()
 
-  if (!isAuthenticated && !user) {
-    // Temporariamente renderiza login enquanto auth estado é verificado
-    return (
-      <AuthLayout>
-        <div className="auth-container">
-          <h2>AgendaLec</h2>
-          <p>Por favor, faça login para acessar a agenda</p>
-          <div className="auth-box">
-            <form>
-              <div className="form-group">
-                <label>Email</label>
-                <input type="email" placeholder="seu@email.com" required />
-              </div>
-              <div className="form-group">
-                <label>Senha</label>
-                <input type="password" placeholder="minhasenha" required />
-              </div>
-              <button type="submit" className="btn-primary">Entrar</button>
-            </form>
-            <p>Não tem uma conta? <a href="/register">Registre-se</a></p>
-          </div>
-        </div>
-      </AuthLayout>
-    )
+  if (loading) {
+    return <div role="status" className="p-6 text-center">Carregando...</div>
   }
 
+  return (
+    <Suspense fallback={<div role="status" className="p-6 text-center">Carregando página...</div>}>
+      <Routes>
+        <Route
+          element={isAuthenticated ? <Navigate to="/calendar" replace /> : <AuthLayout />}
+        >
+          <Route path="/login" element={<LoginPage key="login" />} />
+          <Route path="/register" element={<LoginPage key="register" initialMode="register" />} />
+        </Route>
+        <Route
+          element={isAuthenticated ? <UserLayout /> : <Navigate to="/login" replace />}
+        >
+          <Route path="/" element={<Navigate to="/calendar" replace />} />
+          <Route path="/overview" element={<DashboardPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/agenda/:date?" element={<Navigate to="/calendar" replace />} />
+          <Route path="/calendars" element={<Navigate to="/calendar" replace />} />
+          <Route path="/routine" element={<RoutinePage />} />
+          <Route path="/settings" element={<SettingsPage userId={user?.id ?? ''} />} />
+        </Route>
+        <Route
+          path="*"
+          element={<Navigate to={isAuthenticated && user ? '/calendar' : '/login'} replace />}
+        />
+      </Routes>
+    </Suspense>
+  )
+}
+
+function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
         <CalendarProvider>
-          {isAuthenticated ? (
-            <DashboardLayout>
-              <nav>
-                <ul>
-                  <li><a href="/agenda">Agenda</a></li>
-                  <li><a href="/calendars">Calendários</a></li>
-                  <li><a href="/profile">Perfil</a></li>
-                  <li>
-                    <a href="/logout" onClick={(e) => {
-                      e.preventDefault()
-                      // logout would be called here
-                    }}>Sair</a>
-                  </li>
-                </ul>
-              </nav>
-              <div className="main-content">
-                {/* Routes content */}
-              </div>
-            </DashboardLayout>
-          ) : (
-            <AuthLayout>
-              <div className="auth-container">
-                <h2>AgendaLec</h2>
-                <p>Gerencie sua agenda pessoal de forma simples</p>
-                <div className="auth-box">
-                  <form onSubmit={(e) => {
-                    e.preventDefault()
-                    // Login handling
-                  }}>
-                    <h3>Login</h3>
-                    <div className="form-group">
-                      <label>Email</label>
-                      <input type="email" placeholder="seu@email.com" required />
-                    </div>
-                    <div className="form-group">
-                      <label>Senha</label>
-                      <input type="password" placeholder="minhasenha" required />
-                    </div>
-                    <button type="submit" className="btn-primary">Entrar</button>
-                  </form>
-                  <p>Não tem uma conta? <a href="/register">Registre-se</a></p>
-                </div>
-              </div>
-            </AuthLayout>
-          )}
+          <AppRoutes />
         </CalendarProvider>
       </AuthProvider>
     </ThemeProvider>

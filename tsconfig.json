@@ -4,6 +4,10 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
@@ -12,7 +16,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    
     "noUncheckedSideEffectImports": true,
     "rootDir": ".",
     "outDir": "dist",
