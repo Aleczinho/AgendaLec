@@ -1,20 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 
-// Inicializa o cliente Supabase (será undefined se vars não existirem)
-let supabase: any = null
-
-try {
-  const url = import.meta.env.VITE_SUPABASE_URL?.trim()
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
-
-  if (url && key) {
-    supabase = createClient(url, key)
-  } else {
-    console.warn('Variáveis de ambiente do Supabase não configuradas')
-  }
-} catch (e) {
-  console.warn('Supabase not configured, using client-side only')
-}
+import { supabase } from '@/lib/supabase'
 
 interface ThemeContextValue {
   theme: 'claro' | 'escuro' | 'automatico'

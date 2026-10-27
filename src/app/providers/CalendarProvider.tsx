@@ -1,11 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { createClient, User } from '@supabase/supabase-js'
 
-// Cria cliente Supabase usando variáveis de ambiente
-const supabase = createClient(
-  import.meta.env.VITE_SUBABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-)
+import { supabase, getSession, getUser } from '@/lib/supabase'
+import { User } from '@supabase/supabase-js'
 
 interface CalendarContextValue {
   month: number

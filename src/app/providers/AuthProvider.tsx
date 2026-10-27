@@ -1,11 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { createClient, User } from '@supabase/supabase-js'
 
-// Cria cliente Supabase usando variáveis de ambiente
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-)
+import { supabase } from '@/lib/supabase'
+import { User } from '@supabase/supabase-js'
 
 interface AuthContextValue {
   isAuthenticated: boolean
