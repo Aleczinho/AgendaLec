@@ -93,38 +93,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     assertSupabaseConfigured()
-    setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-    } finally {
-      setLoading(false)
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
   }
 
   const logout = async () => {
     assertSupabaseConfigured()
-    setLoading(true)
-    try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-      setUser(null)
-    } finally {
-      setLoading(false)
-    }
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+    setUser(null)
   }
 
   const signUp = async (email: string, password: string) => {
     assertSupabaseConfigured()
-    setLoading(true)
-    try {
-      const { data, error } = await supabase.auth.signUp({ email, password })
-      if (error) throw error
-      if (data.session) setUser(data.session.user)
-      return data.session !== null
-    } finally {
-      setLoading(false)
-    }
+    const { data, error } = await supabase.auth.signUp({ email, password })
+    if (error) throw error
+    if (data.session) setUser(data.session.user)
+    return data.session !== null
   }
 
   const resetPassword = async (email: string) => {

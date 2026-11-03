@@ -8,6 +8,7 @@ import UserLayout from '@/app/layouts/UserLayout'
 
 const CalendarPage = lazy(() => import('@/pages/CalendarPage').then(module => ({ default: module.CalendarPage })))
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(module => ({ default: module.DashboardPage })))
+const DailyFlowPage = lazy(() => import('@/pages/DailyFlowPage').then(module => ({ default: module.DailyFlowPage })))
 const LoginPage = lazy(() => import('@/pages/LoginPage').then(module => ({ default: module.LoginPage })))
 const RoutinePage = lazy(() => import('@/pages/RoutinePage').then(module => ({ default: module.default })))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then(module => ({ default: module.SettingsPage })))
@@ -33,6 +34,7 @@ const AppRoutes = () => {
         >
           <Route path="/" element={<Navigate to="/calendar" replace />} />
           <Route path="/overview" element={<DashboardPage />} />
+          <Route path="/flow" element={<DailyFlowPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/agenda/:date?" element={<Navigate to="/calendar" replace />} />
           <Route path="/calendars" element={<Navigate to="/calendar" replace />} />

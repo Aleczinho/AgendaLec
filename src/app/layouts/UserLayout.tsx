@@ -1,10 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { CalendarDays, CalendarClock, LayoutDashboard, LogOut, Menu, Settings, X } from 'lucide-react'
+import { Activity, CalendarDays, CalendarClock, LayoutDashboard, LogOut, Menu, Settings, X } from 'lucide-react'
 import { useAuth } from '@/app/providers/AuthProvider'
 
 const navigation = [
   { to: '/overview', label: 'Visão geral', icon: LayoutDashboard },
+  { to: '/flow', label: 'Flow do dia', icon: Activity },
   { to: '/calendar', label: 'Calendário', icon: CalendarDays },
   { to: '/routine', label: 'Rotina', icon: CalendarClock },
   { to: '/settings', label: 'Configurações', icon: Settings },
@@ -82,6 +83,15 @@ const UserLayout = () => {
           </button>
         </div>
       </aside>
+
+      <nav className="mobile-bottom-nav" aria-label="Navegação rápida">
+        {navigation.map(({ to, label, icon: Icon }) => (
+          <NavLink to={to} key={to} onClick={closeMenu} className={({ isActive }) => `mobile-bottom-link${isActive ? ' is-active' : ''}`}>
+            <Icon size={19} strokeWidth={1.9} />
+            <span>{label === 'Flow do dia' ? 'Flow' : label === 'Visão geral' ? 'Início' : label === 'Calendário' ? 'Agenda' : label === 'Configurações' ? 'Ajustes' : label}</span>
+          </NavLink>
+        ))}
+      </nav>
 
       <main className="app-main">
         {logoutError && <p role="alert" className="inline-error app-notice">{logoutError}</p>}
