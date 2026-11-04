@@ -63,7 +63,7 @@ docker compose --env-file .env -f docker/compose.yaml up -d --build
 
 Acesse `http://IP-DO-SERVIDOR:8080`. O nginx do container serve o site e repassa `/api` para a API. Detalhes em [docker/README.md](docker/README.md).
 
-Ao iniciar, a API conecta, aplica as migrations de `server/migrations/` (registradas na tabela `schema_migrations`) e passa a atender. Se algo estiver errado (senha, host, `JWT_SECRET` ausente), ela mostra o motivo no log e encerra.
+Ao iniciar, a API conecta, aplica as migrations de `server/prisma/migrations/` com o Prisma (registradas na tabela `_prisma_migrations`) e passa a atender. Se algo estiver errado (senha, host, `JWT_SECRET` ausente), ela mostra o motivo no log e encerra.
 
 ## 4. Contas de usuário
 
@@ -85,7 +85,7 @@ Senhas têm no mínimo 8 caracteres. Após 10 tentativas de login erradas em 15 
 
 ## 6. Segurança e isolamento
 
-O Supabase isolava usuários por RLS. Aqui o isolamento é feito pela **API**: toda consulta é filtrada pelo usuário do token (`server/src/dataApi.js`); tabelas e colunas aceitas ficam numa lista fixa (`server/src/schema.js`) e os valores sempre vão como parâmetros SQL. Feriados com `user_id NULL` são globais e legíveis por todos.
+O Supabase isolava usuários por RLS. Aqui o isolamento é feito pela **API**: toda consulta é feita com o Prisma Client e filtrada pelo usuário do token (`server/src/dataOps.js`); tabelas e colunas aceitas ficam numa lista fixa (`server/src/schema.js`) e os valores sempre vão como parâmetros (o Prisma nunca concatena valores no SQL). Feriados com `user_id NULL` são globais e legíveis por todos.
 
 - Use HTTPS na frente do site (proxy reverso) se for acessar pela internet: o token de login trafega em cada requisição.
 - Nunca publique o `.env` (ele está no `.gitignore`).
@@ -93,7 +93,7 @@ O Supabase isolava usuários por RLS. Aqui o isolamento é feito pela **API**: t
 
 ## 7. Mudar o esquema
 
-Crie um novo arquivo numerado em `server/migrations/` (ex.: `002_minha_mudanca.sql`); ele roda uma vez, na ordem, no próximo início da API (ou com `npm run db:migrate`). Não edite migrations já aplicadas. Se criar uma tabela nova, registre-a também em `server/src/schema.js` para o front poder usá-la.
+Edite `server/prisma/schema.prisma` e gere a migração com `npm --prefix server run prisma -- migrate dev --name minha_mudanca` (em desenvolvimento). Ela roda uma vez, na ordem, no próximo início da API (ou com `npm run db:migrate`). Não edite migrations já aplicadas. Se criar uma tabela nova, registre-a também em `server/src/schema.js` para o front poder usá-la. Detalhes em [PRISMA.md](PRISMA.md).
 
 ## 8. Testes
 

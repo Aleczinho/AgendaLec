@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { config, configProblems } from './config.js'
-import { pool, query } from './db.js'
+import { prisma } from './db.js'
 import { runMigrations } from './migrate.js'
 import { authRouter } from './auth.js'
 import { dataRouter } from './dataApi.js'
@@ -24,7 +24,7 @@ app.use(express.json({ limit: config.bodyLimit }))
 
 app.get('/api/health', async (_req, res) => {
   try {
-    await query('SELECT 1')
+    await prisma.$queryRaw`SELECT 1` // ping: único SQL literal do sistema, sem parâmetros
     res.json({ status: 'ok' })
   } catch {
     res.status(503).json({ status: 'database_unavailable' })
@@ -50,7 +50,7 @@ app.use((error, _req, res, _next) => {
 
 const start = async () => {
   try {
-    await query('SELECT 1')
+    await prisma.$connect()
   } catch (error) {
     console.error(`Não foi possível conectar ao PostgreSQL (${config.databaseLabel}): ${error.message}`)
     console.error('Confira DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME e DB_SSL no .env, e se o servidor aceita conexões desta máquina (pg_hba.conf / firewall).')
@@ -66,7 +66,7 @@ const start = async () => {
 
   const shutdown = signal => {
     console.log(`[api] ${signal} recebido, encerrando...`)
-    server.close(() => pool.end().finally(() => process.exit(0)))
+    server.close(() => prisma.$disconnect().finally(() => process.exit(0)))
     setTimeout(() => process.exit(1), 10_000).unref()
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'))

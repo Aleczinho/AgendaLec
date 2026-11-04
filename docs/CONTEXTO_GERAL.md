@@ -9,7 +9,7 @@ AgendaLec é uma aplicação web de agenda pessoal. Usuários autenticados consu
 ## Tecnologias e execução
 
 - React 19, TypeScript e Vite 8; navegação com React Router.
-- API Node (Express + `pg`) em `server/`, com login próprio (bcrypt + JWT) e acesso ao PostgreSQL.
+- API Node (Express + Prisma ORM) em `server/`, com login próprio (bcrypt + JWT) e acesso ao PostgreSQL. Todo acesso ao banco passa pelo Prisma Client (veja `PRISMA.md`).
 - `date-fns` para cálculos de datas; Vitest para testes já existentes.
 - `npm run dev`: site local (Vite porta 5173, com proxy de `/api` para a API); `npm run dev:api`: API (porta 3001).
 - `npm run build`: build de produção em `dist/`.
@@ -38,13 +38,13 @@ Configure o `.env` na raiz (modelo em `.env.example`): `DB_HOST`, `DB_PORT`, `DB
 
 As operações de calendário usam `db` de `src/lib/api.ts`, que oferece o mesmo estilo de consulta de antes (`from().select().eq()...`) mas envia a consulta para `POST /api/db`. A consulta de eventos busca compromissos que intersectam o período exibido. Criar, editar e remover atualiza o banco e o estado local. As páginas e componentes de `src/pages/`, `src/components/calendar/`, `src/components/events/` e `src/components/dashboard/` consomem o estado com `useCalendar`.
 
-Rotinas têm lógica de domínio em `src/lib/routines.ts`, `src/lib/routineSeed.ts` e `src/services/routineService.ts`. Uma regra descreve dias da semana, validade, horários fixos/flexíveis/opcionais e intervalo em semanas. `routine_exceptions` guarda mudanças ou estados pontuais por data. A tabela de exceções tem unicidade por regra e data. Cópia de dia da semana e confirmação de ocorrência são funções SQL (`copy_routine_weekday`, `confirm_routine_occurrence`) chamadas por `db.rpc` via `/api/rpc/:nome`; o id do usuário vem do token, nunca do cliente.
+Rotinas têm lógica de domínio em `src/lib/routines.ts`, `src/lib/routineSeed.ts` e `src/services/routineService.ts`. Uma regra descreve dias da semana, validade, horários fixos/flexíveis/opcionais e intervalo em semanas. `routine_exceptions` guarda mudanças ou estados pontuais por data. A tabela de exceções tem unicidade por regra e data. Cópia de dia da semana e confirmação de ocorrência (`copy_routine_weekday`, `confirm_routine_occurrence`) são implementadas em `server/src/routineOps.js` com o Prisma Client e chamadas por `db.rpc` via `/api/rpc/:nome`; o id do usuário vem do token, nunca do cliente.
 
 Na primeira carga de dados do usuário, o serviço pode inicializar feriados e regras de exemplo com chaves estáveis, evitando duplicação via `upsert`. O período inicial usado como fallback é novembro de 2026; mês, ano e dia de referência são gravados em `profiles.preferences`.
 
 ## Banco de dados
 
-As migrações versionadas em `server/migrations/` definem o esquema e são aplicadas automaticamente pela API ao iniciar (tabela `schema_migrations`).
+O esquema é descrito em `server/prisma/schema.prisma`; as migrações versionadas ficam em `server/prisma/migrations/` e são aplicadas automaticamente pela API ao iniciar (`prisma migrate deploy`, histórico na tabela `_prisma_migrations`).
 
 | Tabela/objeto | Papel |
 | --- | --- |
@@ -56,7 +56,7 @@ As migrações versionadas em `server/migrations/` definem o esquema e são apli
 | `routine_rules` | Regras recorrentes e janelas de horário. |
 | `routine_exceptions` | Exceção/estado de ocorrência ligado à regra e ao proprietário. |
 
-Não há RLS: o isolamento por usuário é feito pela API (`server/src/dataApi.js`), que injeta o usuário do token em toda consulta, insert, update, delete e upsert, e só aceita as tabelas/colunas listadas em `server/src/schema.js`. Feriados com `user_id` nulo são globais (somente leitura). Ao criar uma tabela, registre-a em `schema.js`.
+Não há RLS: o isolamento por usuário é feito pela API (`server/src/dataOps.js`, exposta por `dataApi.js`), que injeta o usuário do token em toda consulta, insert, update, delete e upsert feitos com o Prisma Client, e só aceita as tabelas/colunas listadas em `server/src/schema.js`. Feriados com `user_id` nulo são globais (somente leitura). Ao criar uma tabela, declare o model em `schema.prisma`, crie a migração e registre-a em `schema.js`.
 
 ## Organização do código
 
@@ -67,7 +67,7 @@ Não há RLS: o isolamento por usuário é feito pela API (`server/src/dataApi.j
 - `src/lib/`: cliente da API (`api.ts`), datas, validação, rotinas e utilitários puros.
 - `src/services/`: operações de domínio que coordenam o banco e dados iniciais.
 - `src/styles/`: tokens, estilos globais, componentes e responsividade.
-- `server/`: API Node (login, rotas `/api/db` e `/api/rpc`), `migrations/` do banco e scripts de usuário.
+- `server/`: API Node (login, rotas `/api/db` e `/api/rpc`), `prisma/` (schema e migrações do banco) e scripts de usuário.
 - `docker/`: Dockerfile do site, Compose (site + API) e configuração do Nginx.
 
 O alias `@/` aponta para `src/` (configurado em `vite.config.mts` e TypeScript). Preserve essa convenção nos imports.
@@ -75,8 +75,8 @@ O alias `@/` aponta para `src/` (configurado em `vite.config.mts` e TypeScript).
 ## Orientações para mudanças
 
 1. Leia a página, o provider/serviço e a migração relacionada antes de mudar comportamento persistido.
-2. Mantenha dados isolados por usuário na API (`dataApi.js`/`schema.js`). O filtro no cliente não substitui o da API.
-3. Ao mudar o esquema, crie uma nova migração numerada; não reescreva migrações já aplicadas em ambientes compartilhados.
+2. Mantenha dados isolados por usuário na API (`dataOps.js`/`schema.js`). O filtro no cliente não substitui o da API.
+3. Ao mudar o esquema, edite `schema.prisma` e gere uma nova migração (`npm --prefix server run prisma -- migrate dev --name descricao`); não reescreva migrações já aplicadas em ambientes compartilhados.
 4. Trate datas com as funções de `src/lib/` e mantenha coerência entre data local, fuso do usuário e timestamps ISO. Evite parsing manual de datas em telas.
 5. Preserve validações, acessibilidade e layout responsivo dos componentes existentes.
 6. Não assuma que documentos em `historico/` descrevem o sistema atual; confirme no código.

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { config } from './config.js'
-import { query, withTransaction } from './db.js'
+import { prisma, Prisma } from './db.js'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const MIN_PASSWORD_LENGTH = 8
@@ -14,6 +14,33 @@ export const normalizeEmail = value => String(value ?? '').trim().toLowerCase()
 export const hashPassword = password => bcrypt.hash(password, BCRYPT_ROUNDS)
 
 const publicUser = row => ({ id: row.id, email: row.email })
+
+// Os e-mails são sempre gravados já normalizados (minúsculos) por register e pelo scripts/user.js,
+// então a busca é por igualdade exata no valor normalizado.
+const findUserByEmail = email => prisma.users.findFirst({
+  where: { email },
+  select: { id: true, email: true, password_hash: true },
+})
+
+/**
+ * Cria usuário + perfil na mesma transação. Devolve null se o e-mail já existe
+ * (o índice único em lower(email) do banco recusa duplicatas, inclusive com caixa diferente).
+ */
+export const createAccount = async (email, passwordHash) => {
+  try {
+    return await prisma.$transaction(async tx => {
+      const user = await tx.users.create({
+        data: { email, password_hash: passwordHash },
+        select: { id: true, email: true },
+      })
+      await tx.profiles.create({ data: { id: user.id } })
+      return user
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return null
+    throw error
+  }
+}
 
 const signToken = user => jwt.sign(
   { email: user.email },
@@ -76,17 +103,7 @@ authRouter.post('/register', async (req, res, next) => {
     }
     if (password.length > 200) return fail(res, 400, 'A senha é longa demais.', 'weak_password')
 
-    const passwordHash = await hashPassword(password)
-    const user = await withTransaction(async client => {
-      const { rows } = await client.query(
-        `INSERT INTO users (email, password_hash) VALUES ($1, $2)
-         ON CONFLICT DO NOTHING RETURNING id, email`,
-        [email, passwordHash],
-      )
-      if (rows.length === 0) return null
-      await client.query('INSERT INTO profiles (id) VALUES ($1)', [rows[0].id])
-      return rows[0]
-    })
+    const user = await createAccount(email, await hashPassword(password))
     if (!user) return fail(res, 409, 'Este e-mail já está cadastrado.', 'email_exists')
     return res.status(201).json({ token: signToken(user), user: publicUser(user) })
   } catch (error) {
@@ -102,8 +119,7 @@ authRouter.post('/login', async (req, res, next) => {
     }
     const email = normalizeEmail(req.body?.email)
     const password = String(req.body?.password ?? '')
-    const { rows } = await query('SELECT id, email, password_hash FROM users WHERE lower(email) = $1', [email])
-    const user = rows[0]
+    const user = await findUserByEmail(email)
     const valid = await bcrypt.compare(password.slice(0, 200), user?.password_hash ?? DUMMY_HASH)
     if (!user || !valid) {
       registerFailure(key)
@@ -118,9 +134,9 @@ authRouter.post('/login', async (req, res, next) => {
 
 authRouter.get('/me', requireAuth, async (req, res, next) => {
   try {
-    const { rows } = await query('SELECT id, email FROM users WHERE id = $1', [req.user.id])
-    if (rows.length === 0) return fail(res, 401, 'Conta não encontrada.', 'invalid_token')
-    return res.json({ user: publicUser(rows[0]) })
+    const user = await prisma.users.findUnique({ where: { id: req.user.id }, select: { id: true, email: true } })
+    if (!user) return fail(res, 401, 'Conta não encontrada.', 'invalid_token')
+    return res.json({ user: publicUser(user) })
   } catch (error) {
     return next(error)
   }

@@ -1,30 +1,20 @@
-import pg from 'pg'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { config } from './config.js'
 
-// DATE e TIME devem chegar ao navegador como texto ("2026-11-03", "08:00:00").
-// Sem isso o driver cria um Date em fuso local e o dia pode "andar" na serialização.
-pg.types.setTypeParser(1082, value => value)
-pg.types.setTypeParser(1083, value => value)
-// timestamptz sempre em ISO-8601 UTC.
-pg.types.setTypeParser(1184, value => new Date(value).toISOString())
+export { Prisma }
 
-export const pool = new pg.Pool(config.database)
-pool.on('error', error => console.error('[db] erro em conexão ociosa:', error.message))
+/**
+ * Único ponto de acesso ao banco. Toda leitura/escrita da API passa pelo Prisma Client.
+ * O pool de conexões é configurado pela URL (connection_limit, connect_timeout).
+ */
+export const prisma = new PrismaClient({
+  datasources: { db: { url: config.databaseUrl } },
+  log: ['warn', 'error'],
+})
 
-export const query = (text, params) => pool.query(text, params)
-
-/** Executa `fn(client)` dentro de uma transação. */
-export const withTransaction = async fn => {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    const result = await fn(client)
-    await client.query('COMMIT')
-    return result
-  } catch (error) {
-    try { await client.query('ROLLBACK') } catch { /* conexão já perdida */ }
-    throw error
-  } finally {
-    client.release()
-  }
-}
+/** Executa `fn(tx)` dentro de uma transação (commit se resolver, rollback se lançar). */
+export const withTransaction = (fn, options = {}) => prisma.$transaction(fn, {
+  maxWait: 10_000,
+  timeout: 30_000,
+  ...options,
+})

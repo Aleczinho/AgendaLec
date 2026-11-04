@@ -21,38 +21,53 @@ const int = (value, fallback) => {
 }
 
 /** DB_SSL: false | true (valida certificado) | no-verify (TLS sem validar o certificado) */
-const sslOption = () => {
+const sslMode = () => {
   const raw = String(env.DB_SSL ?? 'false').trim().toLowerCase()
-  if (['', 'false', '0', 'off', 'disable', 'no'].includes(raw)) return false
-  if (['no-verify', 'allow-self-signed', 'insecure'].includes(raw)) return { rejectUnauthorized: false }
-  return { rejectUnauthorized: true }
+  if (['', 'false', '0', 'off', 'disable', 'no'].includes(raw)) return 'disable'
+  if (['no-verify', 'allow-self-signed', 'insecure'].includes(raw)) return 'no-verify'
+  return 'verify'
 }
 
-const databaseConfig = () => {
-  const common = {
-    max: int(env.DB_POOL_MAX, 10),
-    connectionTimeoutMillis: int(env.DB_CONNECTION_TIMEOUT_MS, 10_000),
-    idleTimeoutMillis: 30_000,
-  }
+/**
+ * Monta a URL de conexão que o Prisma usa (o schema.prisma lê DATABASE_URL).
+ * Aceita DATABASE_URL pronta ou as variáveis DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME.
+ * Parâmetros que já vierem na DATABASE_URL (connection_limit, sslmode...) são respeitados.
+ */
+const buildDatabaseUrl = () => {
+  let url
   if (env.DATABASE_URL) {
-    const ssl = env.DB_SSL === undefined ? undefined : sslOption()
-    return { connectionString: env.DATABASE_URL, ...(ssl === undefined ? {} : { ssl }), ...common }
+    url = new URL(env.DATABASE_URL)
+  } else {
+    url = new URL('postgresql://localhost')
+    url.hostname = env.DB_HOST || 'localhost'
+    url.port = String(int(env.DB_PORT, 5432))
+    url.username = encodeURIComponent(env.DB_USER || 'postgres')
+    if (env.DB_PASSWORD) url.password = encodeURIComponent(env.DB_PASSWORD)
+    url.pathname = `/${encodeURIComponent(env.DB_NAME || 'agendalec')}`
   }
-  return {
-    host: env.DB_HOST || 'localhost',
-    port: int(env.DB_PORT, 5432),
-    user: env.DB_USER || 'postgres',
-    password: env.DB_PASSWORD || undefined,
-    database: env.DB_NAME || 'agendalec',
-    ssl: sslOption(),
-    ...common,
+  const params = url.searchParams
+  const setDefault = (key, value) => { if (!params.has(key)) params.set(key, String(value)) }
+
+  // Com DATABASE_URL o SSL só é sobrescrito se DB_SSL estiver definido (comportamento anterior).
+  if (!env.DATABASE_URL || env.DB_SSL !== undefined) {
+    const mode = sslMode()
+    params.delete('sslaccept')
+    if (mode === 'disable') {
+      params.set('sslmode', 'disable')
+    } else {
+      params.set('sslmode', 'require')
+      params.set('sslaccept', mode === 'no-verify' ? 'accept_invalid_certs' : 'strict')
+    }
   }
+  setDefault('connection_limit', int(env.DB_POOL_MAX, 10))
+  setDefault('connect_timeout', Math.max(1, Math.ceil(int(env.DB_CONNECTION_TIMEOUT_MS, 10_000) / 1000)))
+  return url.toString()
 }
 
 export const config = {
   port: int(env.API_PORT ?? env.PORT, 3001),
   host: env.API_HOST || '0.0.0.0',
-  database: databaseConfig(),
+  databaseUrl: buildDatabaseUrl(),
   databaseLabel: env.DATABASE_URL
     ? 'DATABASE_URL'
     : `${env.DB_USER || 'postgres'}@${env.DB_HOST || 'localhost'}:${int(env.DB_PORT, 5432)}/${env.DB_NAME || 'agendalec'}`,

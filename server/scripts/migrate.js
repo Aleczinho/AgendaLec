@@ -1,5 +1,4 @@
 import { config } from '../src/config.js'
-import { pool } from '../src/db.js'
 import { runMigrations } from '../src/migrate.js'
 
 try {
@@ -8,6 +7,4 @@ try {
 } catch (error) {
   console.error(error.message)
   process.exitCode = 1
-} finally {
-  await pool.end()
 }

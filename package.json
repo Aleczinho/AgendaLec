@@ -9,10 +9,11 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "setup": "npm install && npm --prefix server install",
+    "setup": "npm install && npm --prefix server install && npm --prefix server run generate",
     "db:migrate": "npm --prefix server run migrate",
     "user:create": "npm --prefix server run user:create --",
-    "user:password": "npm --prefix server run user:password --"
+    "user:password": "npm --prefix server run user:password --",
+    "db:studio": "npm --prefix server run studio"
   },
   "keywords": [],
   "author": "",

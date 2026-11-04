@@ -5,9 +5,9 @@
 import readline from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import { config } from '../src/config.js'
-import { pool, withTransaction } from '../src/db.js'
+import { prisma } from '../src/db.js'
 import { runMigrations } from '../src/migrate.js'
-import { MIN_PASSWORD_LENGTH, hashPassword, normalizeEmail } from '../src/auth.js'
+import { MIN_PASSWORD_LENGTH, createAccount, hashPassword, normalizeEmail } from '../src/auth.js'
 
 const [command, rawEmail, rawPassword] = process.argv.slice(2)
 
@@ -36,21 +36,15 @@ try {
     await runMigrations(() => {}) // garante que as tabelas existem mesmo antes de a API subir pela 1ª vez
 
     if (command === 'create') {
-      await withTransaction(async client => {
-        const { rows } = await client.query(
-          'INSERT INTO users (email, password_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING id',
-          [email, passwordHash],
-        )
-        if (rows.length === 0) throw new Error('Este e-mail já está cadastrado.')
-        await client.query('INSERT INTO profiles (id) VALUES ($1)', [rows[0].id])
-      })
+      const account = await createAccount(email, passwordHash)
+      if (!account) throw new Error('Este e-mail já está cadastrado.')
       console.log(`Usuário criado: ${email} (${config.databaseLabel})`)
     } else {
-      const { rowCount } = await pool.query(
-        'UPDATE users SET password_hash = $2, updated_at = NOW() WHERE lower(email) = $1',
-        [email, passwordHash],
-      )
-      if (rowCount === 0) throw new Error('Usuário não encontrado.')
+      const { count } = await prisma.users.updateMany({
+        where: { email },
+        data: { password_hash: passwordHash, updated_at: new Date() },
+      })
+      if (count === 0) throw new Error('Usuário não encontrado.')
       console.log(`Senha atualizada: ${email}`)
     }
   }
@@ -58,5 +52,5 @@ try {
   console.error(error.message)
   process.exitCode = 1
 } finally {
-  await pool.end()
+  await prisma.$disconnect()
 }
