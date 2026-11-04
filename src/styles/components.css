@@ -2043,3 +2043,14 @@
 @media (min-width: 1024px) {
   .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.btn-danger {
+  border-color: var(--color-error);
+  background: transparent;
+  color: var(--color-error);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-error);
+  color: #fff;
+}
