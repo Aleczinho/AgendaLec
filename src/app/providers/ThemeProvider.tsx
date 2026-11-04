@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { auth, db } from '@/lib/api'
+import { db } from '@/lib/api'
+import { useAuth } from '@/app/providers/AuthProvider'
 
 type Theme = 'claro' | 'escuro' | 'automatico'
 export type AccentPalette = 'violeta' | 'azul' | 'verde' | 'rosa' | 'laranja'
@@ -34,6 +35,7 @@ export const useTheme = () => {
 }
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading: authLoading } = useAuth()
   const [theme, setTheme] = useState<Theme>('automatico')
   const [accentPalette, setAccentPalette] = useState<AccentPalette>('violeta')
   const [prefersDark, setPrefersDark] = useState(false)
@@ -42,15 +44,15 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let active = true
+    if (authLoading) return
+
     const loadTheme = async () => {
       try {
-        const session = auth.getSession()
-
-        if (session?.user) {
+        if (user) {
           const { data, error } = await db
             .from('profiles')
             .select('preferences')
-            .eq('id', session.user.id)
+            .eq('id', user.id)
             .maybeSingle()
           if (error) throw error
 
@@ -89,7 +91,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
     void loadTheme()
     return () => { active = false }
-  }, [])
+  }, [authLoading, user?.id])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')

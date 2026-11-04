@@ -16,4 +16,4 @@ Esta pasta reúne os guias, referências de produto e registros de entrega do pr
 
 ## Fonte de verdade
 
-Para comportamento atual, priorize o código em `src/`, `server/` (API e migrações em `server/migrations/`), `package.json` e os arquivos Docker em `docker/`. Os resumos antigos não substituem a implementação.
+Para comportamento atual, priorize o código em `src/`, `server/` (API e migrações em `server/prisma/migrations/`), `package.json` e os arquivos Docker em `docker/`. Os resumos antigos não substituem a implementação.

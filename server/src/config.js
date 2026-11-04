@@ -72,8 +72,9 @@ export const config = {
     ? 'DATABASE_URL'
     : `${env.DB_USER || 'postgres'}@${env.DB_HOST || 'localhost'}:${int(env.DB_PORT, 5432)}/${env.DB_NAME || 'agendalec'}`,
   autoMigrate: bool(env.DB_AUTO_MIGRATE, true),
-  jwtSecret: env.JWT_SECRET || '',
-  jwtExpiresIn: env.JWT_EXPIRES_IN || '7d',
+  authSecret: env.BETTER_AUTH_SECRET || env.JWT_SECRET || '',
+  authUrl: env.BETTER_AUTH_URL || '',
+  trustedOrigins: [...new Set([env.BETTER_AUTH_TRUSTED_ORIGINS, env.CORS_ORIGIN].flatMap(value => String(value || '').split(',').map(item => item.trim()).filter(Boolean)))],
   allowRegistration: bool(env.ALLOW_REGISTRATION, false),
   corsOrigins: (env.CORS_ORIGIN || '').split(',').map(item => item.trim()).filter(Boolean),
   bodyLimit: env.API_BODY_LIMIT || '10mb',
@@ -82,8 +83,18 @@ export const config = {
 /** Retorna a lista de problemas de configuração que impedem o servidor de subir. */
 export const configProblems = () => {
   const problems = []
-  if (!config.jwtSecret || config.jwtSecret.length < 32) {
-    problems.push('JWT_SECRET precisa ter pelo menos 32 caracteres. Gere um com: openssl rand -hex 48')
+  if (!config.authSecret || config.authSecret.length < 32) {
+    problems.push('BETTER_AUTH_SECRET (ou JWT_SECRET legado) precisa ter pelo menos 32 caracteres. Gere com: openssl rand -base64 32')
+  }
+  if (!config.authUrl) {
+    problems.push('BETTER_AUTH_URL precisa ser a origem pública do AgendaLec, por exemplo https://agenda.exemplo.com (sem /api).')
+  } else {
+    try {
+      const parsed = new URL(config.authUrl)
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('protocolo inválido')
+    } catch {
+      problems.push('BETTER_AUTH_URL precisa ser uma URL absoluta http:// ou https:// válida.')
+    }
   }
   if (!env.DATABASE_URL && !env.DB_HOST) {
     problems.push('Configure DB_HOST (e DB_PORT, DB_USER, DB_PASSWORD, DB_NAME) ou DATABASE_URL no .env.')

@@ -3,7 +3,8 @@ import cors from 'cors'
 import { config, configProblems } from './config.js'
 import { prisma } from './db.js'
 import { runMigrations } from './migrate.js'
-import { authRouter } from './auth.js'
+import { auth } from './auth.js'
+import { toNodeHandler } from 'better-auth/node'
 import { dataRouter } from './dataApi.js'
 
 const problems = configProblems()
@@ -18,8 +19,16 @@ app.disable('x-powered-by')
 app.set('trust proxy', 'loopback, linklocal, uniquelocal')
 
 if (config.corsOrigins.length > 0) {
-  app.use(cors({ origin: config.corsOrigins, allowedHeaders: ['Content-Type', 'Authorization'] }))
+  app.use(cors({
+    origin: config.corsOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }))
 }
+
+// O Better Auth precisa receber o stream original: monte o handler antes de express.json().
+app.all('/api/auth/*', toNodeHandler(auth))
 app.use(express.json({ limit: config.bodyLimit }))
 
 app.get('/api/health', async (_req, res) => {
@@ -31,7 +40,6 @@ app.get('/api/health', async (_req, res) => {
   }
 })
 
-app.use('/api/auth', authRouter)
 app.use('/api', dataRouter)
 
 app.use('/api', (_req, res) => res.status(404).json({ error: { message: 'Rota não encontrada.' } }))

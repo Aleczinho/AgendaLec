@@ -80,49 +80,12 @@ describe('db query builder (payload enviado à API)', () => {
     expect(offline.error?.message).toMatch(/servidor/)
   })
 
-  it('401 derruba a sessão guardada', async () => {
-    const { db, auth } = await loadApi()
-    const listener = vi.fn()
-    auth.onChange(listener)
+  it('envia cookies de sessão nas consultas e converte 401 sem token local', async () => {
+    const { db } = await loadApi()
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'expirou' } }), { status: 401 }))
     const result = await db.from('events').select()
-    expect(result.error?.code).toBe('invalid_token')
-    expect(listener).toHaveBeenCalledWith(null)
+    expect(result.error?.code).toBe('unauthenticated')
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: 'include' })
   })
 })
 
-// Teste ponta a ponta contra a API real (veja server/README). Ignorado sem TEST_API_URL.
-describe.skipIf(!process.env.TEST_API_URL)('cliente contra a API real', () => {
-  it('login, gravação, leitura com as mesmas consultas do app e logout', async () => {
-    vi.resetModules()
-    vi.stubEnv('VITE_API_URL', `${process.env.TEST_API_URL}/api`)
-    const { db, auth } = await import('./api')
-    const email = `e2e-${Date.now()}@example.com`
-    const session = await auth.signUp(email, 'senha-forte-123')
-    expect(session.user.email).toBe(email)
-
-    const saved = await db.from('events')
-      .insert({ id: crypto.randomUUID(), title: 'Reunião', start_at: '2026-11-10T13:00:00.000Z', user_id: session.user.id })
-      .select().single()
-    expect(saved.error).toBeNull()
-
-    const start = new Date(2026, 10, -6).toISOString()
-    const end = new Date(2026, 11, 15).toISOString()
-    const list = await db.from('events').select('*').eq('user_id', session.user.id)
-      .lt('start_at', end).or(`end_at.is.null,end_at.gte.${start}`).order('start_at')
-    expect(list.error).toBeNull()
-    expect(list.data.map((row: { title: string }) => row.title)).toEqual(['Reunião'])
-
-    const pref = await db.from('profiles').upsert({ id: session.user.id, preferences: { theme: 'escuro' } }, { onConflict: 'id' })
-    expect(pref.error).toBeNull()
-    const read = await db.from('profiles').select('preferences').eq('id', session.user.id).maybeSingle()
-    expect(read.data.preferences.theme).toBe('escuro')
-
-    expect(await auth.restoreSession()).not.toBeNull()
-    auth.signOut()
-    expect(auth.getSession()).toBeNull()
-    const denied = await db.from('events').select()
-    expect(denied.error?.status).toBe(401)
-    vi.unstubAllEnvs()
-  })
-})

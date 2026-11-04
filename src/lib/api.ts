@@ -1,18 +1,10 @@
-// Cliente da API do AgendaLec (substitui o cliente do Supabase).
-//
-// O navegador nunca fala direto com o PostgreSQL: ele chama a API em `server/`,
-// que usa as credenciais do banco definidas no .env do servidor.
-// `db` imita a interface de consultas que o app já usava (from/select/eq/...),
-// então os componentes continuam construindo consultas do mesmo jeito.
+// Cliente da API do AgendaLec. O navegador autentica por cookie HTTP-only do Better Auth.
+// As consultas de dados continuam usando o contrato já existente da API.
 
 export interface User {
   id: string
   email: string
-}
-
-export interface Session {
-  token: string
-  user: User
+  name?: string | null
 }
 
 export interface ApiError {
@@ -27,50 +19,10 @@ export interface DbResult<T = any> {
   count: number | null
 }
 
-const SESSION_KEY = 'agendalec_session'
-
 /** URL base da API. Padrão `/api` (mesma origem, via proxy do nginx/Vite). */
 export const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '')
 
 export const NETWORK_ERROR_MESSAGE = 'Não foi possível conectar ao servidor da AgendaLec. Verifique se a API está em execução.'
-
-// ---------------------------------------------------------------- sessão
-
-type AuthListener = (session: Session | null) => void
-const listeners = new Set<AuthListener>()
-
-const readStoredSession = (): Session | null => {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<Session>
-    return parsed.token && parsed.user?.id ? parsed as Session : null
-  } catch {
-    return null
-  }
-}
-
-let currentSession: Session | null = readStoredSession()
-
-const setSession = (session: Session | null) => {
-  currentSession = session
-  try {
-    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-    else localStorage.removeItem(SESSION_KEY)
-  } catch { /* armazenamento indisponível: a sessão vale só nesta aba */ }
-  listeners.forEach(listener => listener(session))
-}
-
-export class AuthError extends Error {
-  status?: number
-  code?: string
-  constructor(message: string, status?: number, code?: string) {
-    super(message)
-    this.name = 'AuthError'
-    this.status = status
-    this.code = code
-  }
-}
 
 const parseJson = async (response: Response) => {
   try {
@@ -83,56 +35,18 @@ const parseJson = async (response: Response) => {
 const request = async (path: string, init: RequestInit = {}) => {
   const headers = new Headers(init.headers)
   if (init.body !== undefined) headers.set('Content-Type', 'application/json')
-  if (currentSession) headers.set('Authorization', `Bearer ${currentSession.token}`)
   let response: Response
   try {
-    response = await fetch(`${API_URL}${path}`, { ...init, headers })
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers,
+      credentials: 'include',
+    })
   } catch {
-    throw new AuthError(NETWORK_ERROR_MESSAGE)
+    throw new Error(NETWORK_ERROR_MESSAGE)
   }
   const json = await parseJson(response)
   return { response, json }
-}
-
-const authRequest = async (path: string, body: { email: string; password: string }) => {
-  const { response, json } = await request(path, { method: 'POST', body: JSON.stringify(body) })
-  if (!response.ok || !json?.token) {
-    throw new AuthError(
-      json?.error?.message ?? 'Não foi possível concluir a operação.',
-      response.status,
-      json?.error?.code,
-    )
-  }
-  const session: Session = { token: json.token, user: json.user }
-  setSession(session)
-  return session
-}
-
-export const auth = {
-  /** Sessão guardada neste navegador (sem consultar o servidor). */
-  getSession: (): Session | null => currentSession,
-
-  signIn: (email: string, password: string) => authRequest('/auth/login', { email, password }),
-  signUp: (email: string, password: string) => authRequest('/auth/register', { email, password }),
-  signOut: () => setSession(null),
-
-  /** Confirma com o servidor que o token guardado ainda é válido. */
-  async restoreSession(): Promise<Session | null> {
-    if (!currentSession) return null
-    const { response, json } = await request('/auth/me')
-    if (response.status === 401) {
-      setSession(null)
-      return null
-    }
-    if (!response.ok || !json?.user) throw new AuthError(json?.error?.message ?? 'Não foi possível restaurar a sessão.', response.status)
-    return currentSession
-  },
-
-  /** Avisa quando a sessão muda (login, logout, token expirado). Retorna a função de cancelar. */
-  onChange(listener: AuthListener) {
-    listeners.add(listener)
-    return () => { listeners.delete(listener) }
-  },
 }
 
 // ---------------------------------------------------------------- consultas
@@ -262,9 +176,7 @@ export class QueryBuilder implements PromiseLike<DbResult> {
 
 const toDbResult = (response: Response, json: any): DbResult => {
   if (response.status === 401) {
-    // Token expirado/inválido: derruba a sessão para o app voltar ao login.
-    setSession(null)
-    return { data: null, count: null, error: { message: json?.error?.message ?? 'Sessão expirada. Entre novamente.', code: 'invalid_token', status: 401 } }
+    return { data: null, count: null, error: { message: json?.error?.message ?? 'Sessão expirada. Entre novamente.', code: 'unauthenticated', status: 401 } }
   }
   if (!response.ok || json?.error) {
     return {

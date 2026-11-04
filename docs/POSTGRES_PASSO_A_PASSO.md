@@ -37,11 +37,14 @@ Edite o `.env`:
 | `DATABASE_URL` | Alternativa: URL única (`postgresql://user:senha@host:5432/banco`). Tem prioridade sobre as variáveis acima. Codifique caracteres especiais da senha (`@` → `%40`). |
 | `DB_SSL` | `false`, `true` (valida o certificado) ou `no-verify` (TLS com certificado autoassinado). |
 | `DB_AUTO_MIGRATE` | `true`: a API cria/atualiza as tabelas ao iniciar. |
-| `JWT_SECRET` | Segredo que assina os logins (mín. 32 caracteres): `openssl rand -hex 48`. **Obrigatório.** |
-| `JWT_EXPIRES_IN` | Validade do login (`7d`, `12h`...). |
+| `BETTER_AUTH_URL` | Origem pública do AgendaLec, sem `/api` (ex.: `https://agenda.exemplo.com`). **Obrigatório.** |
+| `BETTER_AUTH_SECRET` | Segredo do Better Auth (mín. 32 caracteres): `openssl rand -base64 32`. **Obrigatório.** |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | Origens extras do frontend, separadas por vírgula; use quando site e API estiverem em origens diferentes. |
 | `ALLOW_REGISTRATION` | `true` libera a tela de cadastro; `false` bloqueia novas contas. |
 | `API_PORT` | Porta da API (padrão 3001). |
 | `APP_PORT` | Porta do site no Docker (padrão 8080). |
+
+Em desenvolvimento com Vite, use `BETTER_AUTH_URL=http://localhost:5173`. No Docker, use a origem que o navegador acessa (por exemplo `http://IP-DO-SERVIDOR:8080` ou o domínio HTTPS). A URL é a origem do site, não a URL interna do container da API.
 
 Se o PostgreSQL roda **na mesma máquina do Docker**, use `DB_HOST=host.docker.internal` (o Compose já mapeia esse nome) e confira que o `pg_hba.conf` aceita a rede do Docker.
 
@@ -63,11 +66,13 @@ docker compose --env-file .env -f docker/compose.yaml up -d --build
 
 Acesse `http://IP-DO-SERVIDOR:8080`. O nginx do container serve o site e repassa `/api` para a API. Detalhes em [docker/README.md](docker/README.md).
 
-Ao iniciar, a API conecta, aplica as migrations de `server/prisma/migrations/` com o Prisma (registradas na tabela `_prisma_migrations`) e passa a atender. Se algo estiver errado (senha, host, `JWT_SECRET` ausente), ela mostra o motivo no log e encerra.
+Ao iniciar, a API conecta, aplica as migrations de `server/prisma/migrations/` com o Prisma (registradas na tabela `_prisma_migrations`) e passa a atender. Se algo estiver errado (senha, host, `BETTER_AUTH_URL` ou `BETTER_AUTH_SECRET` ausente), ela mostra o motivo no log e encerra.
+
+**Antes da primeira inicialização com esta versão, faça um backup do PostgreSQL.** A migration `20261104000000_better_auth` copia os hashes bcrypt antigos para `accounts.password` e, em seguida, remove `users.password_hash`. Os IDs e os dados de calendários/eventos/rotinas são preservados, mas faça o backup antes de aplicar qualquer migration em produção.
 
 ## 4. Contas de usuário
 
-O login é próprio (e-mail + senha, com hash bcrypt na tabela `users`). Não há envio de e-mail, então não existe "esqueci minha senha" por e-mail; use os comandos abaixo no servidor (na raiz do projeto, com o `.env` configurado):
+O login e o cadastro são gerenciados pelo Better Auth (e-mail + senha), com sessões em cookies HTTP-only. A migration transfere os hashes bcrypt existentes para `accounts.password`, preservando as contas e os IDs de usuário. Não há envio de e-mail configurado, então use os comandos abaixo no servidor para criar usuários ou redefinir senhas:
 
 ```sh
 npm run user:create   -- voce@exemplo.com          # pede a senha no terminal
@@ -76,7 +81,7 @@ npm run user:password -- voce@exemplo.com          # redefine a senha
 
 Fluxo sugerido: deixe `ALLOW_REGISTRATION=true`, crie sua conta pela tela de cadastro (ou com `user:create`) e depois mude para `false` e reinicie a API.
 
-Senhas têm no mínimo 8 caracteres. Após 10 tentativas de login erradas em 15 minutos (mesmo IP + e-mail), a API responde 429 por um tempo.
+Senhas têm no mínimo 8 e no máximo 200 caracteres. As sessões duram 7 dias e são armazenadas no banco; logout e redefinição administrativa de senha revogam as sessões correspondentes. As sessões JWT antigas deixam de valer após a atualização, mas as mesmas contas e senhas permanecem válidas.
 
 ## 5. Trazer os dados do Supabase
 
@@ -85,11 +90,11 @@ Senhas têm no mínimo 8 caracteres. Após 10 tentativas de login erradas em 15 
 
 ## 6. Segurança e isolamento
 
-O Supabase isolava usuários por RLS. Aqui o isolamento é feito pela **API**: toda consulta é feita com o Prisma Client e filtrada pelo usuário do token (`server/src/dataOps.js`); tabelas e colunas aceitas ficam numa lista fixa (`server/src/schema.js`) e os valores sempre vão como parâmetros (o Prisma nunca concatena valores no SQL). Feriados com `user_id NULL` são globais e legíveis por todos.
+O Supabase isolava usuários por RLS. Aqui o isolamento é feito pela **API**: toda consulta é feita com o Prisma Client e filtrada pelo usuário autenticado (`server/src/dataOps.js`); tabelas e colunas aceitas ficam numa lista fixa (`server/src/schema.js`) e os valores sempre vão como parâmetros (o Prisma nunca concatena valores no SQL). Feriados com `user_id NULL` são globais e legíveis por todos.
 
-- Use HTTPS na frente do site (proxy reverso) se for acessar pela internet: o token de login trafega em cada requisição.
+- Use HTTPS na frente do site (proxy reverso) se for acessar pela internet; em produção, configure `BETTER_AUTH_URL` com `https://` para que os cookies recebam os atributos seguros.
 - Nunca publique o `.env` (ele está no `.gitignore`).
-- Trocar `JWT_SECRET` desconecta todos os usuários.
+- Trocar `BETTER_AUTH_SECRET` pode invalidar cookies e exigir novo login. Guarde esse segredo fora do repositório.
 
 ## 7. Mudar o esquema
 
@@ -100,6 +105,6 @@ Edite `server/prisma/schema.prisma` e gere a migração com `npm --prefix server
 ```sh
 npm test                                   # testes do front (vitest)
 # Testes de integração da API: use um banco DE TESTE
-TEST_API_URL=http://localhost:3001 npm --prefix server test
+TEST_API_URL=http://localhost:3001 TEST_ORIGIN=http://localhost:5173 npm --prefix server test
 TEST_API_URL=http://localhost:3001 npx vitest run src/lib/api.test.ts
 ```

@@ -9,6 +9,7 @@ Todo SQL da API (`server/`) passa pelo [Prisma ORM](https://github.com/prisma/or
 | `server/prisma/schema.prisma` | Models (nomes iguais aos das tabelas/colunas, em snake_case). |
 | `server/prisma/migrations/` | Migrations versionadas (`prisma migrate`). A `20261103000000_init` é o esquema anterior (001_schema.sql). |
 | `server/src/db.js` | `PrismaClient` único e `withTransaction`. |
+| `server/src/auth.js` | Configuração Better Auth, adapter Prisma e middleware para validar a sessão por cookie. |
 | `server/src/config.js` | Monta a `DATABASE_URL` do Prisma a partir de `DB_*` (ou usa a `DATABASE_URL` do `.env`). |
 | `server/src/dataOps.js` | Traduz o corpo de `POST /api/db` em chamadas do Prisma Client (`findMany`, `createMany`, `updateMany`...). |
 | `server/src/routineOps.js` | `copy_routine_weekday` e `confirm_routine_occurrence`, antes funções PL/pgSQL. |
@@ -39,8 +40,12 @@ As funções SQL `copy_routine_weekday` e `confirm_routine_occurrence` continuam
 ## O que o Prisma não descreve (fica só na migration SQL)
 
 - `CHECK` das tabelas, o índice único em `lower(email)` e as funções acima. Ao gerar migrations com `migrate dev`, confira o SQL antes de aplicar (`--create-only`).
-- Por isso e-mails são sempre gravados em minúsculas (`register` e `scripts/user.js` já normalizam) e a busca no login é por igualdade exata.
+- `users.email` tem unicidade direta exigida pelo Prisma/Better Auth; o índice antigo em `lower(email)` continua impedindo duplicatas que diferem só por maiúsculas/minúsculas. Cadastro e scripts normalizam e-mails.
 
 ## Um SQL literal
 
 `GET /api/health` usa `prisma.$queryRaw\`SELECT 1\`` como ping do banco (sem parâmetros, sem entrada do usuário). Todo o resto usa o Prisma Client.
+
+## Migração de autenticação
+
+A migration `20261104000000_better_auth` adiciona `accounts`, `sessions` e `verifications`, acrescenta os campos necessários a `users` e copia os hashes bcrypt de `users.password_hash` para `accounts.password` (`provider_id = credential`). Ela mantém os UUIDs e as FKs de calendários, eventos, feriados e rotinas; depois remove a coluna antiga `password_hash`.

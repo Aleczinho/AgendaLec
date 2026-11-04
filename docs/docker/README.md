@@ -10,7 +10,7 @@ O PostgreSQL **não** faz parte do Compose: ele é o que você já hospeda. Veja
 ## Preparar
 
 1. Copie o projeto completo para o servidor (mantendo `docker/` e `server/` na raiz).
-2. Na **raiz** do projeto: `cp .env.example .env` e preencha `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` e `JWT_SECRET` (`openssl rand -hex 48`). `APP_PORT` muda a porta do site (padrão `8080`).
+2. Na **raiz** do projeto: `cp .env.example .env` e preencha `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `BETTER_AUTH_URL` (origem pública do site, por exemplo `http://IP-DO-SERVIDOR:8080`) e `BETTER_AUTH_SECRET` (`openssl rand -base64 32`). `APP_PORT` muda a porta do site (padrão `8080`).
 3. Ainda na raiz, execute:
 
    ```sh
@@ -34,10 +34,10 @@ docker exec -it agendalec-api node scripts/user.js password voce@exemplo.com
 docker compose --env-file .env -f docker/compose.yaml up -d --build
 ```
 
-Mudou algo no `.env` (senha do banco, `JWT_SECRET`, `ALLOW_REGISTRATION`)? Basta recriar a API: `docker compose --env-file .env -f docker/compose.yaml up -d api`. Só `VITE_API_URL` exige rebuild do site, pois é embutida no build.
+Mudou algo no `.env` (senha do banco, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `ALLOW_REGISTRATION`)? Basta recriar a API: `docker compose --env-file .env -f docker/compose.yaml up -d api`. Só `VITE_API_URL` exige rebuild do site, pois é embutida no build.
 
 ## Problemas comuns
 
-- **API reinicia em loop**: leia `docker logs agendalec-api`; o motivo (senha, host, SSL, `JWT_SECRET`) aparece na primeira linha.
+- **API reinicia em loop**: leia `docker logs agendalec-api`; o motivo (senha, host, SSL, `BETTER_AUTH_URL` ou `BETTER_AUTH_SECRET`) aparece na primeira linha.
 - **`ECONNREFUSED` / timeout**: o PostgreSQL não aceita conexões deste container. Confira `listen_addresses`, `pg_hba.conf` e o firewall. Se o banco está no mesmo servidor, use `DB_HOST=host.docker.internal`.
 - **`no pg_hba.conf entry ... no encryption`**: o servidor exige SSL; defina `DB_SSL=true` (ou `no-verify` para certificado autoassinado).

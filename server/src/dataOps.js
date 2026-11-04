@@ -81,7 +81,7 @@ const toRowArray = values => {
   return rows
 }
 
-/** Linha do cliente → `data` do Prisma, com o dono sempre forçado para o usuário do token. */
+/** Linha do cliente → `data` do Prisma, com o dono sempre forçado para o usuário da sessão. */
 const prepareRow = (def, userId, row) => {
   const data = {}
   for (const [key, value] of Object.entries(row)) {

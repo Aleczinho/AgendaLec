@@ -7,7 +7,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 COPY server/package.json server/package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Gera o Prisma Client; o CLI (prisma migrate deploy) fica disponível para a API aplicar as migrations ao iniciar.
 COPY server/prisma ./prisma

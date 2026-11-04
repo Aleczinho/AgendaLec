@@ -9,13 +9,13 @@ AgendaLec é uma aplicação web de agenda pessoal. Usuários autenticados consu
 ## Tecnologias e execução
 
 - React 19, TypeScript e Vite 8; navegação com React Router.
-- API Node (Express + Prisma ORM) em `server/`, com login próprio (bcrypt + JWT) e acesso ao PostgreSQL. Todo acesso ao banco passa pelo Prisma Client (veja `PRISMA.md`).
+- API Node (Express + Prisma ORM) em `server/`, com autenticação Better Auth (e-mail/senha, cookies HTTP-only e sessões persistidas no PostgreSQL). Todo acesso ao banco passa pelo Prisma Client (veja `PRISMA.md`).
 - `date-fns` para cálculos de datas; Vitest para testes já existentes.
 - `npm run dev`: site local (Vite porta 5173, com proxy de `/api` para a API); `npm run dev:api`: API (porta 3001).
 - `npm run build`: build de produção em `dist/`.
 - `npm test`: executa a suíte existente (`vitest run`).
 
-Configure o `.env` na raiz (modelo em `.env.example`): `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (ou `DATABASE_URL`), `JWT_SECRET` etc. Ele é lido só pela API; as credenciais do banco nunca chegam ao navegador. Variáveis `VITE_*` vão para o navegador (só `VITE_API_URL`, opcional). Passo a passo em `POSTGRES_PASSO_A_PASSO.md`.
+Configure o `.env` na raiz (modelo em `.env.example`): `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (ou `DATABASE_URL`), `BETTER_AUTH_URL` e `BETTER_AUTH_SECRET`. Ele é lido só pela API; as credenciais do banco nunca chegam ao navegador. Variáveis `VITE_*` vão para o navegador (só `VITE_API_URL`, opcional). Passo a passo em `POSTGRES_PASSO_A_PASSO.md`.
 
 ## Inicialização e navegação
 
@@ -30,7 +30,7 @@ Configure o `.env` na raiz (modelo em `.env.example`): `DB_HOST`, `DB_PORT`, `DB
 | `/settings` | Autenticado; preferências da conta. |
 | `/` | Redireciona ao calendário. |
 
-`AuthProvider` restaura a sessão guardada (token JWT em `localStorage`), confirma-a com `/api/auth/me`, escuta mudanças de autenticação e carrega o nome do perfil. `UserLayout` protege a área autenticada; `AuthLayout` envolve as telas públicas. Rotas antigas `/agenda/:date?` e `/calendars` redirecionam para `/calendar`.
+`AuthProvider` usa o hook de sessão do Better Auth; o navegador envia automaticamente o cookie HTTP-only e o provider carrega o nome do perfil. `UserLayout` protege a área autenticada; `AuthLayout` envolve as telas públicas. Rotas antigas `/agenda/:date?` e `/calendars` redirecionam para `/calendar`.
 
 ## Estado e fluxos de dados
 
@@ -38,7 +38,7 @@ Configure o `.env` na raiz (modelo em `.env.example`): `DB_HOST`, `DB_PORT`, `DB
 
 As operações de calendário usam `db` de `src/lib/api.ts`, que oferece o mesmo estilo de consulta de antes (`from().select().eq()...`) mas envia a consulta para `POST /api/db`. A consulta de eventos busca compromissos que intersectam o período exibido. Criar, editar e remover atualiza o banco e o estado local. As páginas e componentes de `src/pages/`, `src/components/calendar/`, `src/components/events/` e `src/components/dashboard/` consomem o estado com `useCalendar`.
 
-Rotinas têm lógica de domínio em `src/lib/routines.ts`, `src/lib/routineSeed.ts` e `src/services/routineService.ts`. Uma regra descreve dias da semana, validade, horários fixos/flexíveis/opcionais e intervalo em semanas. `routine_exceptions` guarda mudanças ou estados pontuais por data. A tabela de exceções tem unicidade por regra e data. Cópia de dia da semana e confirmação de ocorrência (`copy_routine_weekday`, `confirm_routine_occurrence`) são implementadas em `server/src/routineOps.js` com o Prisma Client e chamadas por `db.rpc` via `/api/rpc/:nome`; o id do usuário vem do token, nunca do cliente.
+Rotinas têm lógica de domínio em `src/lib/routines.ts`, `src/lib/routineSeed.ts` e `src/services/routineService.ts`. Uma regra descreve dias da semana, validade, horários fixos/flexíveis/opcionais e intervalo em semanas. `routine_exceptions` guarda mudanças ou estados pontuais por data. A tabela de exceções tem unicidade por regra e data. Cópia de dia da semana e confirmação de ocorrência (`copy_routine_weekday`, `confirm_routine_occurrence`) são implementadas em `server/src/routineOps.js` com o Prisma Client e chamadas por `db.rpc` via `/api/rpc/:nome`; o id do usuário vem da sessão validada, nunca do cliente.
 
 Na primeira carga de dados do usuário, o serviço pode inicializar feriados e regras de exemplo com chaves estáveis, evitando duplicação via `upsert`. O período inicial usado como fallback é novembro de 2026; mês, ano e dia de referência são gravados em `profiles.preferences`.
 
@@ -48,7 +48,10 @@ O esquema é descrito em `server/prisma/schema.prisma`; as migrações versionad
 
 | Tabela/objeto | Papel |
 | --- | --- |
-| `users` | Contas (e-mail e hash bcrypt da senha); só a API acessa. |
+| `users` | Identidade e e-mail das contas; mantém os UUIDs usados pelas tabelas de dados. |
+| `accounts` | Credenciais e provedores Better Auth; senha bcrypt armazenada no registro `credential`. |
+| `sessions` | Sessões do Better Auth, com token e expiração; o token não fica em `localStorage`. |
+| `verifications` | Tokens temporários usados pelos fluxos de verificação do Better Auth. |
 | `profiles` | Perfil, fuso e preferências JSONB; `id` corresponde a `users.id`. |
 | `calendars` | Agendas do usuário, com nome, cor e estado ativo. |
 | `events` | Compromissos, horários, categoria, estado, certeza e agenda opcional. |
@@ -56,7 +59,7 @@ O esquema é descrito em `server/prisma/schema.prisma`; as migrações versionad
 | `routine_rules` | Regras recorrentes e janelas de horário. |
 | `routine_exceptions` | Exceção/estado de ocorrência ligado à regra e ao proprietário. |
 
-Não há RLS: o isolamento por usuário é feito pela API (`server/src/dataOps.js`, exposta por `dataApi.js`), que injeta o usuário do token em toda consulta, insert, update, delete e upsert feitos com o Prisma Client, e só aceita as tabelas/colunas listadas em `server/src/schema.js`. Feriados com `user_id` nulo são globais (somente leitura). Ao criar uma tabela, declare o model em `schema.prisma`, crie a migração e registre-a em `schema.js`.
+Não há RLS: o isolamento por usuário é feito pela API (`server/src/dataOps.js`, exposta por `dataApi.js`), que injeta o usuário da sessão em toda consulta, insert, update, delete e upsert feitos com o Prisma Client, e só aceita as tabelas/colunas listadas em `server/src/schema.js`. Feriados com `user_id` nulo são globais (somente leitura). Ao criar uma tabela, declare o model em `schema.prisma`, crie a migração e registre-a em `schema.js`.
 
 ## Organização do código
 
@@ -67,7 +70,7 @@ Não há RLS: o isolamento por usuário é feito pela API (`server/src/dataOps.j
 - `src/lib/`: cliente da API (`api.ts`), datas, validação, rotinas e utilitários puros.
 - `src/services/`: operações de domínio que coordenam o banco e dados iniciais.
 - `src/styles/`: tokens, estilos globais, componentes e responsividade.
-- `server/`: API Node (login, rotas `/api/db` e `/api/rpc`), `prisma/` (schema e migrações do banco) e scripts de usuário.
+- `server/`: API Node (Better Auth em `/api/auth/*`, rotas `/api/db` e `/api/rpc`), `prisma/` (schema e migrações do banco) e scripts de usuário.
 - `docker/`: Dockerfile do site, Compose (site + API) e configuração do Nginx.
 
 O alias `@/` aponta para `src/` (configurado em `vite.config.mts` e TypeScript). Preserve essa convenção nos imports.
