@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
-import { assertSupabaseConfigured, supabase, supabaseConfigured } from '@/lib/supabase'
+import { auth, db } from '@/lib/api'
+import type { User } from '@/lib/api'
 
 interface AuthContextValue {
   isAuthenticated: boolean
@@ -11,7 +11,6 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   signUp: (email: string, password: string) => Promise<boolean>
-  resetPassword: (email: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -25,29 +24,23 @@ export const useAuth = () => {
 }
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null)
+  // A sessão guardada no navegador vale de imediato; o servidor a confirma logo em seguida.
+  const [user, setUser] = useState<User | null>(() => auth.getSession()?.user ?? null)
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!supabaseConfigured) {
-      setLoading(false)
-      return
-    }
-
     let active = true
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active) return
-      setUser(session?.user ?? null)
-      setLoading(false)
+    const unsubscribe = auth.onChange(session => {
+      if (active) setUser(session?.user ?? null)
     })
 
-    supabase.auth.getSession()
-      .then(({ data, error }) => {
-        if (error) throw error
-        if (active) setUser(data.session?.user ?? null)
+    auth.restoreSession()
+      .then(session => {
+        if (active) setUser(session?.user ?? null)
       })
       .catch(error => {
+        // Servidor fora do ar: mantém a sessão local; as chamadas seguintes mostram o erro.
         console.error('Unable to restore the authentication session:', error)
       })
       .finally(() => {
@@ -56,7 +49,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       active = false
-      subscription.unsubscribe()
+      unsubscribe()
     }
   }, [])
 
@@ -69,7 +62,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let active = true
     const loadProfile = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await db
           .from('profiles')
           .select('display_name')
           .eq('id', user.id)
@@ -92,47 +85,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user])
 
   const login = async (email: string, password: string) => {
-    assertSupabaseConfigured()
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
+      const session = await auth.signIn(email, password)
+      setUser(session.user)
     } finally {
       setLoading(false)
     }
   }
 
   const logout = async () => {
-    assertSupabaseConfigured()
-    setLoading(true)
-    try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-      setUser(null)
-    } finally {
-      setLoading(false)
-    }
+    auth.signOut()
+    setUser(null)
   }
 
   const signUp = async (email: string, password: string) => {
-    assertSupabaseConfigured()
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password })
-      if (error) throw error
-      if (data.session) setUser(data.session.user)
-      return data.session !== null
+      const session = await auth.signUp(email, password)
+      setUser(session.user)
+      return true
     } finally {
       setLoading(false)
     }
-  }
-
-  const resetPassword = async (email: string) => {
-    assertSupabaseConfigured()
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
-    })
-    if (error) throw error
   }
 
   return (
@@ -146,7 +121,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         login,
         logout,
         signUp,
-        resetPassword,
       }}
     >
       {children}

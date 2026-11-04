@@ -1,4 +1,26 @@
+# Suba a partir da RAIZ do projeto, usando o .env da raiz:
+#   docker compose --env-file .env -f docker/compose.yaml up -d --build
 services:
+  api:
+    container_name: agendalec-api
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      API_PORT: "3001"
+    extra_hosts:
+      # Permite usar DB_HOST=host.docker.internal se o PostgreSQL roda neste mesmo servidor.
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   agendalec:
     container_name: agendalec
     build:
@@ -6,8 +28,9 @@ services:
       dockerfile: docker/Dockerfile
       args:
         VITE_BASE_PATH: /
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Configure VITE_SUPABASE_URL in docker/.env}
-        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:?Configure VITE_SUPABASE_PUBLISHABLE_KEY in docker/.env}
+        VITE_API_URL: ${VITE_API_URL:-}
+    depends_on:
+      - api
     ports:
       - "${APP_PORT:-8080}:80"
     restart: unless-stopped

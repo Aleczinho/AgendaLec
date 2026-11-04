@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/api'
 import { initialNovemberHolidays, initialRoutineRules } from '@/lib/routineSeed'
 
 export const initializeHolidaysForUser = async (userId: string) => {
@@ -9,7 +9,7 @@ export const initializeHolidaysForUser = async (userId: string) => {
     scope: 'nacional',
     verification_status: 'verified',
   }))
-  const { error } = await supabase
+  const { error } = await db
     .from('holiday_dates')
     .upsert(holidays, { onConflict: 'user_id,seed_key', ignoreDuplicates: true })
   if (error) throw error
@@ -19,20 +19,20 @@ export const initializeHolidaysForUser = async (userId: string) => {
 
 export const initializeRoutineForUser = async (userId: string) => {
   const keys = initialRoutineRules.map(rule => rule.seed_key).filter((key): key is string => key !== null)
-  const { data: existingRules, error: existingError } = await supabase
+  const { data: existingRules, error: existingError } = await db
     .from('routine_rules')
     .select('seed_key')
     .eq('user_id', userId)
     .in('seed_key', keys)
   if (existingError) throw existingError
 
-  const existingKeys = new Set((existingRules ?? []).map(rule => rule.seed_key))
+  const existingKeys = new Set(((existingRules ?? []) as { seed_key: string | null }[]).map(rule => rule.seed_key))
   const missingRules = initialRoutineRules
     .filter(rule => rule.seed_key && !existingKeys.has(rule.seed_key))
     .map(rule => ({ ...rule, user_id: userId }))
 
   if (missingRules.length > 0) {
-    const { error } = await supabase
+    const { error } = await db
       .from('routine_rules')
       .upsert(missingRules, { onConflict: 'user_id,seed_key', ignoreDuplicates: true })
     if (error) throw error
@@ -40,7 +40,7 @@ export const initializeRoutineForUser = async (userId: string) => {
 
   const holidayCount = await initializeHolidaysForUser(userId)
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await db
     .from('profiles')
     .select('preferences')
     .eq('id', userId)
@@ -54,7 +54,7 @@ export const initializeRoutineForUser = async (userId: string) => {
     calendarReferenceYear: preferences.calendarReferenceYear ?? 2026,
     calendarReferenceDay: preferences.calendarReferenceDay ?? 1,
   }
-  const { error: preferenceError } = await supabase
+  const { error: preferenceError } = await db
     .from('profiles')
     .upsert({ id: userId, preferences: nextPreferences }, { onConflict: 'id' })
   if (preferenceError) throw preferenceError

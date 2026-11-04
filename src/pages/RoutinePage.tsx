@@ -249,7 +249,7 @@ const RoutinePage = () => {
         : 'Rotina de novembro de 2026 e feriados adicionados à sua conta.')
     } catch (error) {
       console.error('Unable to initialize the personal routine:', error)
-      setPageError(`Não foi possível iniciar a rotina. Verifique se a migration do Supabase foi aplicada. ${messageForError(error)}`)
+      setPageError(`Não foi possível iniciar a rotina. Verifique se as migrations do banco foram aplicadas (a API faz isso ao iniciar). ${messageForError(error)}`)
     } finally {
       setIsSeeding(false)
     }

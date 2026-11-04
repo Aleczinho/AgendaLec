@@ -5,8 +5,8 @@ Esta pasta reúne os guias, referências de produto e registros de entrega do pr
 ## Para entender e executar o projeto
 
 - [Contexto geral para IA e desenvolvedores](CONTEXTO_GERAL.md): arquitetura atual, fluxos, dados, comandos e regras para mudanças.
-- [Configuração do Supabase](SUPABASE_PASSO_A_PASSO.md): criação do banco, migrações, autenticação e variáveis de ambiente.
-- [Publicação com Docker no ZimaOS](docker/README.md): build e execução do frontend em container.
+- [Configuração do PostgreSQL](POSTGRES_PASSO_A_PASSO.md): banco, `.env`, API, usuários e migração de dados vindos do Supabase.
+- [Publicação com Docker no ZimaOS](docker/README.md): site e API em containers, ligados ao seu PostgreSQL.
 
 ## Referências e histórico
 
@@ -16,4 +16,4 @@ Esta pasta reúne os guias, referências de produto e registros de entrega do pr
 
 ## Fonte de verdade
 
-Para comportamento atual, priorize o código em `src/`, as migrações em `supabase/migrations/`, `package.json` e os arquivos Docker da raiz `docker/`. Os resumos antigos não substituem a implementação.
+Para comportamento atual, priorize o código em `src/`, `server/` (API e migrações em `server/migrations/`), `package.json` e os arquivos Docker em `docker/`. Os resumos antigos não substituem a implementação.

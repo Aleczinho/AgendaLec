@@ -11,9 +11,9 @@ export const routineSchemaErrorMessage = (error: unknown) => {
     error
     && typeof error === 'object'
     && 'code' in error
-    && error.code === 'PGRST205'
+    && error.code === '42P01'
   ) {
-    return 'As tabelas da Rotina ainda não existem no Supabase. Aplique a migration 20261027000001_routine_rules.sql e recarregue a página.'
+    return 'As tabelas da Rotina ainda não existem no banco. Reinicie a API (ela aplica as migrations ao iniciar) ou rode "npm run migrate" na pasta server e recarregue a página.'
   }
   return errorMessage(error, 'Não foi possível carregar as regras da Rotina.')
 }

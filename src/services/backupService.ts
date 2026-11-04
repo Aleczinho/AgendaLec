@@ -1,11 +1,11 @@
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/api'
 import { chunk, prepareImport, type ParsedBackup } from '@/lib/calendarBackup'
 
 type Row = Record<string, unknown>
 type DbError = { code?: string; message: string } | null
 
 const CHUNK_SIZE = 500
-const MISSING_TABLE = 'PGRST205'
+const MISSING_TABLE = '42P01' // undefined_table
 
 const check = (error: DbError, label: string, optional = false) => {
   if (!error) return
@@ -15,7 +15,7 @@ const check = (error: DbError, label: string, optional = false) => {
 
 const upsertAll = async (table: string, rows: Row[], onConflict: string, optional = false) => {
   for (const part of chunk(rows, CHUNK_SIZE)) {
-    const { error } = await supabase.from(table).upsert(part, { onConflict })
+    const { error } = await db.from(table).upsert(part, { onConflict })
     check(error, table, optional)
   }
 }
@@ -31,7 +31,7 @@ export interface DeleteCounts {
 /** Apaga todos os dados do usuário. Preferências do perfil e a conta são mantidas. */
 export const deleteAllUserData = async (userId: string): Promise<DeleteCounts> => {
   const remove = async (table: string, optional = false) => {
-    const { error, count } = await supabase.from(table).delete({ count: 'exact' }).eq('user_id', userId)
+    const { error, count } = await db.from(table).delete({ count: 'exact' }).eq('user_id', userId)
     check(error, table, optional)
     return count ?? 0
   }
@@ -62,7 +62,7 @@ export const importBackup = async (
 
   // 1. Calendários
   await upsertAll('calendars', prepared.calendars, 'id')
-  const { data: calendarRows, error: calendarError } = await supabase.from('calendars').select('id').eq('user_id', userId)
+  const { data: calendarRows, error: calendarError } = await db.from('calendars').select('id').eq('user_id', userId)
   check(calendarError, 'calendars')
   const knownCalendars = new Set((calendarRows ?? []).map((row: Row) => row.id as string))
   const fixCalendar = (row: Row): Row => (
@@ -80,7 +80,7 @@ export const importBackup = async (
   if (hasRoutine) {
     await upsertAll('routine_rules', prepared.seededRules.map(fixCalendar), 'user_id,seed_key')
     await upsertAll('routine_rules', prepared.rules.map(fixCalendar), 'id')
-    const { data: ruleRows, error: ruleError } = await supabase
+    const { data: ruleRows, error: ruleError } = await db
       .from('routine_rules').select('id, seed_key').eq('user_id', userId)
     check(ruleError, 'routine_rules')
     const idBySeed = new Map<string, string>()
@@ -98,10 +98,10 @@ export const importBackup = async (
 
   // 4. Preferências: o backup é mesclado por cima das atuais.
   if (prepared.preferences) {
-    const { data: profile, error: readError } = await supabase.from('profiles').select('preferences').eq('id', userId).maybeSingle()
+    const { data: profile, error: readError } = await db.from('profiles').select('preferences').eq('id', userId).maybeSingle()
     check(readError, 'profiles')
     const current = (profile?.preferences ?? {}) as Row
-    const { error } = await supabase
+    const { error } = await db
       .from('profiles')
       .upsert({ id: userId, preferences: { ...current, ...prepared.preferences } }, { onConflict: 'id' })
     check(error, 'profiles')

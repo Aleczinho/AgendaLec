@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTheme, type AccentPalette } from '@/app/providers/ThemeProvider'
 import { useCalendar } from '@/app/providers/CalendarProvider'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/api'
 import { Card } from '@/components/ui/Card'
 import { errorMessage as getErrorMessage } from '@/lib/errors'
 import { DELETE_CONFIRMATION, parseBackup, summarizeBackup, type ParsedBackup } from '@/lib/calendarBackup'
@@ -78,7 +78,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
   useEffect(() => {
     let active = true
     const loadSettings = async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('profiles')
         .select('preferences')
         .eq('id', userId)
@@ -113,7 +113,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
     setMessage('')
 
     try {
-      const { data: profile, error: readError } = await supabase
+      const { data: profile, error: readError } = await db
         .from('profiles')
         .select('preferences')
         .eq('id', userId)
@@ -128,7 +128,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
         timeFormat,
         calendarView,
       }
-      const { error } = await supabase
+      const { error } = await db
         .from('profiles')
         .upsert({ id: userId, preferences }, { onConflict: 'id' })
       if (error) throw error
@@ -158,7 +158,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
     setIsExporting(true)
     try {
       const range = { from: exportFrom || undefined, to: exportTo || undefined }
-      const { data: eventRows, error: eventsError } = await supabase
+      const { data: eventRows, error: eventsError } = await db
         .from('events')
         .select('*')
         .eq('user_id', userId)
@@ -168,7 +168,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
 
       let holidays: ExportHoliday[] = []
       if (includeHolidays) {
-        let query = supabase
+        let query = db
           .from('holiday_dates')
           .select('*')
           .or(`user_id.is.null,user_id.eq.${userId}`)
@@ -210,7 +210,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
       const read = async (label: string, query: PromiseLike<{ data: unknown; error: { code?: string; message: string } | null }>, optional = false) => {
         const { data, error } = await query
         if (error) {
-          if (optional || error.code === 'PGRST205') {
+          if (optional || error.code === '42P01') {
             warnings.push(`${label}: ${error.message}`)
             return []
           }
@@ -220,12 +220,12 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
       }
 
       const [profileResult, calendars, events, holidays, routineRules, routineExceptions] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
-        read('calendars', supabase.from('calendars').select('*').eq('user_id', userId)),
-        read('events', supabase.from('events').select('*').eq('user_id', userId).order('start_at')),
-        read('holiday_dates', supabase.from('holiday_dates').select('*').eq('user_id', userId).order('date')),
-        read('routine_rules', supabase.from('routine_rules').select('*').eq('user_id', userId).order('title')),
-        read('routine_exceptions', supabase.from('routine_exceptions').select('*').eq('user_id', userId).order('occurrence_date')),
+        db.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        read('calendars', db.from('calendars').select('*').eq('user_id', userId)),
+        read('events', db.from('events').select('*').eq('user_id', userId).order('start_at')),
+        read('holiday_dates', db.from('holiday_dates').select('*').eq('user_id', userId).order('date')),
+        read('routine_rules', db.from('routine_rules').select('*').eq('user_id', userId).order('title')),
+        read('routine_exceptions', db.from('routine_exceptions').select('*').eq('user_id', userId).order('occurrence_date')),
       ])
       if (profileResult.error) throw profileResult.error
 

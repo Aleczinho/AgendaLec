@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
 import { useAuth } from '@/app/providers/AuthProvider'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/api'
+import type { User } from '@/lib/api'
 import type { RoutineException, RoutineRule } from '@/lib/routines'
 import { errorMessage, routineSchemaErrorMessage } from '@/lib/errors'
 import { initializeHolidaysForUser } from '@/services/routineService'
@@ -94,7 +94,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
     let active = true
     setPeriodReadyForUser(null)
     void (async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('profiles')
         .select('preferences')
         .eq('id', user.id)
@@ -137,14 +137,14 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
     if (!user || periodReadyForUser !== user.id) return
     const timeout = window.setTimeout(() => {
       void (async () => {
-        const { data: profile, error: readError } = await supabase
+        const { data: profile, error: readError } = await db
           .from('profiles')
           .select('preferences')
           .eq('id', user.id)
           .maybeSingle()
         if (readError) throw readError
         const preferences = (profile?.preferences ?? {}) as Record<string, unknown>
-        const { error } = await supabase.from('profiles').upsert({
+        const { error } = await db.from('profiles').upsert({
           id: user.id,
           preferences: {
             ...preferences,
@@ -168,7 +168,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
     const periodStart = new Date(year, month - 1, -6)
     const periodEnd = new Date(year, month, 15)
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('events')
       .select('*')
       .eq('user_id', user.id)
@@ -190,7 +190,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
     const yearStart = `${year}-01-01`
     const nextYearStart = `${year + 1}-01-01`
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('holiday_dates')
       .select('*')
       .gte('date', yearStart)
@@ -215,8 +215,8 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
     const periodEndDate = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, '0')}-${String(periodEnd.getDate()).padStart(2, '0')}`
 
     const [rulesResult, exceptionsResult] = await Promise.all([
-      supabase.from('routine_rules').select('*').eq('user_id', user.id).order('title'),
-      supabase
+      db.from('routine_rules').select('*').eq('user_id', user.id).order('title'),
+      db
         .from('routine_exceptions')
         .select('*')
         .eq('user_id', user.id)
@@ -270,7 +270,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
   const saveEvent = async (eventData: EventRecord) => {
     if (!user) throw new Error('É necessário entrar para salvar um compromisso.')
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('events')
       .insert({ ...eventData, id: crypto.randomUUID(), user_id: user.id })
       .select()
@@ -284,7 +284,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
   const updateEvent = async (eventId: string, eventData: EventRecord) => {
     if (!user) throw new Error('É necessário entrar para atualizar um compromisso.')
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('events')
       .update(eventData)
       .eq('id', eventId)
@@ -300,7 +300,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
   const deleteEvent = async (eventId: string) => {
     if (!user) throw new Error('É necessário entrar para excluir um compromisso.')
 
-    const { error } = await supabase
+    const { error } = await db
       .from('events')
       .delete()
       .eq('id', eventId)
@@ -317,7 +317,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
   const saveRoutineRule = async (rule: Partial<RoutineRule>) => {
     if (!user) throw new Error('É necessário entrar para salvar a rotina.')
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('routine_rules')
       .insert({ ...rule, user_id: user.id })
       .select()
@@ -329,7 +329,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
   const updateRoutineRule = async (ruleId: string, updates: Partial<RoutineRule>) => {
     if (!user) throw new Error('É necessário entrar para atualizar a rotina.')
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('routine_rules')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', ruleId)
@@ -342,7 +342,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
   const deleteRoutineRule = async (ruleId: string) => {
     if (!user) throw new Error('É necessário entrar para excluir uma regra de rotina.')
-    const { error } = await supabase.from('routine_rules').delete().eq('id', ruleId).eq('user_id', user.id)
+    const { error } = await db.from('routine_rules').delete().eq('id', ruleId).eq('user_id', user.id)
     if (error) throw error
     setRoutineRules(previous => previous.filter(rule => rule.id !== ruleId))
     setRoutineExceptions(previous => previous.filter(exception => exception.routine_rule_id !== ruleId))
@@ -351,7 +351,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
   const saveRoutineException = async (exception: Omit<RoutineException, 'user_id'>) => {
     if (!user) throw new Error('É necessário entrar para alterar uma ocorrência.')
     const values = { ...exception, user_id: user.id, updated_at: new Date().toISOString() }
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('routine_exceptions')
       .upsert(values, { onConflict: 'routine_rule_id,occurrence_date' })
       .select()
@@ -365,7 +365,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
   const deleteRoutineException = async (ruleId: string, date: string) => {
     if (!user) throw new Error('É necessário entrar para restaurar a ocorrência.')
-    const { error } = await supabase
+    const { error } = await db
       .from('routine_exceptions')
       .delete()
       .eq('routine_rule_id', ruleId)
@@ -379,7 +379,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
   const copyRoutineWeekday = async (sourceWeekday: number, targetWeekday: number) => {
     if (!user) throw new Error('É necessário entrar para copiar a rotina.')
-    const { error } = await supabase.rpc('copy_routine_weekday', {
+    const { error } = await db.rpc('copy_routine_weekday', {
       source_weekday: sourceWeekday,
       target_weekday: targetWeekday,
     })
@@ -389,7 +389,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }) =>
 
   const confirmRoutineOccurrence = async (ruleId: string, date: string) => {
     if (!user) throw new Error('É necessário entrar para confirmar uma ocorrência.')
-    const { error } = await supabase.rpc('confirm_routine_occurrence', {
+    const { error } = await db.rpc('confirm_routine_occurrence', {
       target_rule_id: ruleId,
       confirmed_date: date,
     })

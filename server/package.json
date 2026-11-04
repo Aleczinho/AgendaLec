@@ -1,0 +1,26 @@
+{
+  "name": "agendalec-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API do AgendaLec: autenticação própria e acesso ao PostgreSQL",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node scripts/migrate.js",
+    "user:create": "node scripts/user.js create",
+    "user:password": "node scripts/user.js password",
+    "test": "node --test test/api.integration.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  }
+}

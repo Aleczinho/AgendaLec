@@ -5,15 +5,20 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
+    "dev:api": "npm --prefix server run dev",
     "build": "vite build",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "setup": "npm install && npm --prefix server install",
+    "db:migrate": "npm --prefix server run migrate",
+    "user:create": "npm --prefix server run user:create --",
+    "user:password": "npm --prefix server run user:password --"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
     "@vitejs/plugin-react": "^6.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

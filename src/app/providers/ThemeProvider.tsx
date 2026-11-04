@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase, supabaseConfigured } from '@/lib/supabase'
+import { auth, db } from '@/lib/api'
 
 type Theme = 'claro' | 'escuro' | 'automatico'
 export type AccentPalette = 'violeta' | 'azul' | 'verde' | 'rosa' | 'laranja'
@@ -44,22 +44,10 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     let active = true
     const loadTheme = async () => {
       try {
-        if (!supabaseConfigured) {
-          const selectedTheme = storedTheme() ?? 'automatico'
-          const selectedPalette = localStorage.getItem('agendalec_palette')
-          if (active) {
-            setTheme(selectedTheme)
-            if (isAccentPalette(selectedPalette)) setAccentPalette(selectedPalette)
-            setSavedTheme(selectedTheme)
-          }
-          return
-        }
-
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError) throw sessionError
+        const session = auth.getSession()
 
         if (session?.user) {
-          const { data, error } = await supabase
+          const { data, error } = await db
             .from('profiles')
             .select('preferences')
             .eq('id', session.user.id)
