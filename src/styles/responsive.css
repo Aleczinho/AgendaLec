@@ -18,6 +18,12 @@
   }
 }
 
+@media (max-width: 1000px) {
+  .routine-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 820px) {
   .auth-layout {
     grid-template-columns: minmax(240px, 0.8fr) minmax(360px, 1.2fr);
@@ -33,6 +39,20 @@
 
   .app-main {
     padding: 28px 20px 36px;
+  }
+
+  .routine-heading {
+    display: grid;
+    gap: 14px;
+  }
+
+  .routine-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .routine-header-actions .btn {
+    flex: 1 1 180px;
   }
 
   .calendar-toolbar {
@@ -69,11 +89,11 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .routine-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .routine-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .routine-detail-layout {
+  .agenda-page-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -83,6 +103,12 @@
 
   .dashboard-panels {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .routine-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -183,7 +209,7 @@
   }
 
   .page-subtitle {
-    max-width: 250px;
+    max-width: 100%;
     font-size: 12px;
   }
 
@@ -405,14 +431,6 @@
     padding: 15px;
   }
 
-  .routine-heading {
-    display: grid;
-  }
-
-  .routine-header-actions {
-    width: 100%;
-  }
-
   .routine-header-actions .btn {
     flex: 1;
     padding: 0 9px;
@@ -440,7 +458,6 @@
   }
 
   .routine-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 7px;
   }
 

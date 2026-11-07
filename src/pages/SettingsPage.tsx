@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTheme, type AccentPalette } from '@/app/providers/ThemeProvider'
 import { useCalendar } from '@/app/providers/CalendarProvider'
 import { db } from '@/lib/api'
@@ -33,6 +33,16 @@ type Preferences = {
   [key: string]: unknown
 }
 
+type SettingsValues = {
+  theme: Theme
+  accentPalette: AccentPalette
+  firstDayOfWeek: 'domingo' | 'segunda'
+  timeFormat: '24h' | '12h'
+  calendarView: 'mensal' | 'semanal' | 'diaria'
+}
+
+const settingsKey = (settings: SettingsValues) => JSON.stringify(settings)
+
 export const SettingsPage = ({ userId }: SettingsPageProps) => {
   const { theme, setTheme, accentPalette, setAccentPalette } = useTheme()
   const {
@@ -50,6 +60,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
   const [firstDayOfWeek, setFirstDayOfWeek] = useState<'domingo' | 'segunda'>('segunda')
   const [timeFormat, setTimeFormat] = useState<'24h' | '12h'>('24h')
   const [calendarView, setCalendarView] = useState<'mensal' | 'semanal' | 'diaria'>('mensal')
+  const [isPreferencesLoaded, setIsPreferencesLoaded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -74,9 +85,12 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteMessage, setDeleteMessage] = useState('')
   const [deleteError, setDeleteError] = useState('')
+  const lastSavedSettings = useRef<string | null>(null)
+  const failedSettings = useRef<string | null>(null)
 
   useEffect(() => {
     let active = true
+    setIsPreferencesLoaded(false)
     const loadSettings = async () => {
       const { data, error } = await db
         .from('profiles')
@@ -84,20 +98,28 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
         .eq('id', userId)
         .maybeSingle()
       if (error) throw error
-      if (!active || !data) return
+      if (!active) return
 
-      const preferences = (data.preferences ?? {}) as Preferences
-      if (preferences.theme && ['claro', 'escuro', 'automatico'].includes(preferences.theme)) {
-        setSelectedTheme(preferences.theme)
+      const preferences = (data?.preferences ?? {}) as Preferences
+      const nextSettings: SettingsValues = {
+        theme: preferences.theme === 'claro' || preferences.theme === 'escuro' || preferences.theme === 'automatico'
+          ? preferences.theme : selectedTheme,
+        accentPalette: preferences.accentPalette === 'violeta' || preferences.accentPalette === 'azul'
+          || preferences.accentPalette === 'verde' || preferences.accentPalette === 'rosa' || preferences.accentPalette === 'laranja'
+          ? preferences.accentPalette : selectedPalette,
+        firstDayOfWeek: preferences.firstDayOfWeek === 'domingo' ? 'domingo' : 'segunda',
+        timeFormat: preferences.timeFormat === '12h' ? '12h' : '24h',
+        calendarView: preferences.calendarView === 'mensal' || preferences.calendarView === 'semanal'
+          || preferences.calendarView === 'diaria' ? preferences.calendarView : 'mensal',
       }
-      if (preferences.accentPalette && ['violeta', 'azul', 'verde', 'rosa', 'laranja'].includes(preferences.accentPalette)) {
-        setSelectedPalette(preferences.accentPalette)
-      }
-      if (preferences.firstDayOfWeek) {
-        setFirstDayOfWeek(preferences.firstDayOfWeek)
-      }
-      if (preferences.timeFormat === '12h' || preferences.timeFormat === '24h') setTimeFormat(preferences.timeFormat)
-      if (preferences.calendarView) setCalendarView(preferences.calendarView)
+      setSelectedTheme(nextSettings.theme)
+      setSelectedPalette(nextSettings.accentPalette)
+      setFirstDayOfWeek(nextSettings.firstDayOfWeek)
+      setTimeFormat(nextSettings.timeFormat)
+      setCalendarView(nextSettings.calendarView)
+      lastSavedSettings.current = settingsKey(nextSettings)
+      failedSettings.current = null
+      setIsPreferencesLoaded(true)
     }
 
     void loadSettings().catch(error => {
@@ -107,7 +129,24 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
     return () => { active = false }
   }, [userId])
 
-  const handleSave = async () => {
+  const currentSettings: SettingsValues = {
+    theme: selectedTheme,
+    accentPalette: selectedPalette,
+    firstDayOfWeek,
+    timeFormat,
+    calendarView,
+  }
+  const currentSettingsKey = settingsKey(currentSettings)
+
+  const handleSave = useCallback(async () => {
+    const savingSettings: SettingsValues = {
+      theme: selectedTheme,
+      accentPalette: selectedPalette,
+      firstDayOfWeek,
+      timeFormat,
+      calendarView,
+    }
+    const savingSettingsKey = settingsKey(savingSettings)
     setIsLoading(true)
     setErrorMessage('')
     setMessage('')
@@ -122,30 +161,52 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
 
       const preferences = {
         ...((profile?.preferences ?? {}) as Preferences),
-        theme: selectedTheme,
-        accentPalette: selectedPalette,
-        firstDayOfWeek,
-        timeFormat,
-        calendarView,
+        ...savingSettings,
       }
       const { error } = await db
         .from('profiles')
         .upsert({ id: userId, preferences }, { onConflict: 'id' })
       if (error) throw error
 
-      setTheme(selectedTheme)
-      setAccentPalette(selectedPalette)
-      setWeekStartsOn(firstDayOfWeek === 'segunda' ? 1 : 0)
-      setCalendarTimeFormat(timeFormat)
-      applyDefaultCalendarView(calendarView)
-      setMessage('Preferências salvas.')
+      lastSavedSettings.current = savingSettingsKey
+      failedSettings.current = null
+      setTheme(savingSettings.theme)
+      setAccentPalette(savingSettings.accentPalette)
+      setWeekStartsOn(savingSettings.firstDayOfWeek === 'segunda' ? 1 : 0)
+      setCalendarTimeFormat(savingSettings.timeFormat)
+      applyDefaultCalendarView(savingSettings.calendarView)
+      setMessage('Configurações salvas automaticamente.')
     } catch (error) {
       console.error('Unable to save preferences:', error)
+      failedSettings.current = savingSettingsKey
       setErrorMessage('Não foi possível salvar as configurações.')
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [
+    userId,
+    selectedTheme,
+    selectedPalette,
+    firstDayOfWeek,
+    timeFormat,
+    calendarView,
+    setTheme,
+    setAccentPalette,
+    setWeekStartsOn,
+    setCalendarTimeFormat,
+    applyDefaultCalendarView,
+  ])
+
+  useEffect(() => {
+    if (!isPreferencesLoaded || isLoading || lastSavedSettings.current === currentSettingsKey) return
+    if (failedSettings.current === currentSettingsKey) return
+    if (failedSettings.current !== null) failedSettings.current = null
+
+    setMessage('')
+    setErrorMessage('')
+    const timeout = window.setTimeout(() => { void handleSave() }, 500)
+    return () => window.clearTimeout(timeout)
+  }, [currentSettingsKey, handleSave, isLoading, isPreferencesLoaded])
 
   const handleExport = async () => {
     setExportError('')
@@ -326,15 +387,14 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
         </div>
       </header>
 
-      {errorMessage && <p role="alert" className="mb-4 text-sm text-red-600">{errorMessage}</p>}
-      {message && <p role="status" className="mb-4 text-sm text-green-700">{message}</p>}
+      {errorMessage && <p role="alert" className="settings-feedback text-sm text-red-600">{errorMessage}</p>}
 
       <div className="settings-layout">
-        <Card className="space-y-4 p-4">
+        <Card className="p-4">
           <h2 className="text-sm font-medium uppercase tracking-wider text-secondary">Aparência e calendário</h2>
           <label className="block text-sm text-secondary">
             Tema
-            <select className="select select-sm mt-1 w-full" value={selectedTheme} onChange={event => setSelectedTheme(event.target.value as Theme)}>
+            <select className="select select-sm w-full" value={selectedTheme} onChange={event => setSelectedTheme(event.target.value as Theme)}>
               <option value="automatico">Automático</option>
               <option value="claro">Claro</option>
               <option value="escuro">Escuro</option>
@@ -342,7 +402,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
           </label>
           <label className="block text-sm text-secondary">
             Cor principal
-            <select className="select select-sm mt-1 w-full" value={selectedPalette} onChange={event => setSelectedPalette(event.target.value as AccentPalette)}>
+            <select className="select select-sm w-full" value={selectedPalette} onChange={event => setSelectedPalette(event.target.value as AccentPalette)}>
               <option value="violeta">Violeta</option>
               <option value="azul">Azul</option>
               <option value="verde">Verde</option>
@@ -352,21 +412,21 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
           </label>
           <label className="block text-sm text-secondary">
             Formato de horário
-            <select className="select select-sm mt-1 w-full" value={timeFormat} onChange={event => setTimeFormat(event.target.value as '24h' | '12h')}>
+            <select className="select select-sm w-full" value={timeFormat} onChange={event => setTimeFormat(event.target.value as '24h' | '12h')}>
               <option value="24h">24 horas</option>
               <option value="12h">12 horas</option>
             </select>
           </label>
           <label className="block text-sm text-secondary">
             Primeiro dia da semana
-            <select className="select select-sm mt-1 w-full" value={firstDayOfWeek} onChange={event => setFirstDayOfWeek(event.target.value as 'domingo' | 'segunda')}>
+            <select className="select select-sm w-full" value={firstDayOfWeek} onChange={event => setFirstDayOfWeek(event.target.value as 'domingo' | 'segunda')}>
               <option value="domingo">Domingo</option>
               <option value="segunda">Segunda-feira</option>
             </select>
           </label>
           <label className="block text-sm text-secondary">
             Visualização padrão
-            <select className="select select-sm mt-1 w-full" value={calendarView} onChange={event => setCalendarView(event.target.value as 'mensal' | 'semanal' | 'diaria')}>
+            <select className="select select-sm w-full" value={calendarView} onChange={event => setCalendarView(event.target.value as 'mensal' | 'semanal' | 'diaria')}>
               <option value="mensal">Mensal</option>
               <option value="semanal">Semanal</option>
               <option value="diaria">Diária</option>
@@ -374,30 +434,30 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
           </label>
         </Card>
 
-        <Card className="space-y-4 p-4">
+        <Card className="p-4">
           <h2 className="text-sm font-medium uppercase tracking-wider text-secondary">Exportar calendário</h2>
           <p className="text-sm text-secondary">
             Baixe seus compromissos para usar em outro app (Google Agenda, Outlook, Apple Calendário) ou em planilhas.
           </p>
           <label className="block text-sm text-secondary">
             Formato
-            <select className="select select-sm mt-1 w-full" value={exportFormat} onChange={event => setExportFormat(event.target.value as ExportFormat)}>
+            <select className="select select-sm w-full" value={exportFormat} onChange={event => setExportFormat(event.target.value as ExportFormat)}>
               <option value="ics">iCalendar (.ics)</option>
               <option value="csv">Planilha (.csv)</option>
             </select>
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="settings-date-range">
             <label className="block text-sm text-secondary">
               De
-              <input type="date" className="input mt-1 w-full" value={exportFrom} onChange={event => setExportFrom(event.target.value)} />
+              <input type="date" className="input w-full" value={exportFrom} onChange={event => setExportFrom(event.target.value)} />
             </label>
             <label className="block text-sm text-secondary">
               Até
-              <input type="date" className="input mt-1 w-full" value={exportTo} onChange={event => setExportTo(event.target.value)} />
+              <input type="date" className="input w-full" value={exportTo} onChange={event => setExportTo(event.target.value)} />
             </label>
           </div>
           <p className="text-xs text-secondary">Deixe as datas em branco para exportar tudo.</p>
-          <label className="flex items-center gap-2 text-sm text-secondary">
+          <label className="settings-checkbox-label text-sm text-secondary">
             <input type="checkbox" checked={includeHolidays} onChange={event => setIncludeHolidays(event.target.checked)} />
             Incluir feriados
           </label>
@@ -408,7 +468,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
           </button>
         </Card>
 
-        <Card className="space-y-4 p-4">
+        <Card className="p-4">
           <h2 className="text-sm font-medium uppercase tracking-wider text-secondary">Backup completo</h2>
           <p className="text-sm text-secondary">
             Baixa tudo de uma vez em um arquivo .json: compromissos, rotina (regras e ocorrências alteradas), calendários, feriados e suas preferências.
@@ -420,7 +480,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
           </button>
         </Card>
 
-        <Card className="space-y-4 p-4">
+        <Card className="p-4">
           <h2 className="text-sm font-medium uppercase tracking-wider text-secondary">Importar backup</h2>
           <p className="text-sm text-secondary">
             Restaura um arquivo .json gerado pelo "Backup completo". Por padrão os dados são mesclados com os atuais; itens com o mesmo identificador são atualizados.
@@ -430,7 +490,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
             <input
               type="file"
               accept=".json,application/json"
-              className="input mt-1 w-full"
+              className="input w-full"
               onChange={event => void handleImportFile(event.target.files?.[0])}
             />
           </label>
@@ -440,14 +500,14 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
               {importFile.exportedAt ? ` (exportado em ${new Date(importFile.exportedAt).toLocaleString('pt-BR')})` : ''}.
             </p>
           )}
-          <label className="flex items-center gap-2 text-sm text-secondary">
+          <label className="settings-checkbox-label text-sm text-secondary">
             <input type="checkbox" checked={replaceOnImport} onChange={event => setReplaceOnImport(event.target.checked)} />
             Apagar os dados atuais antes de importar
           </label>
           {replaceOnImport && (
             <label className="block text-sm text-secondary">
               Para confirmar, digite {DELETE_CONFIRMATION}
-              <input className="input mt-1 w-full" value={replaceConfirmation} onChange={event => setReplaceConfirmation(event.target.value)} autoComplete="off" />
+              <input className="input w-full" value={replaceConfirmation} onChange={event => setReplaceConfirmation(event.target.value)} autoComplete="off" />
             </label>
           )}
           {importError && <p role="alert" className="text-sm text-red-600">{importError}</p>}
@@ -462,7 +522,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
           </button>
         </Card>
 
-        <Card className="space-y-4 p-4">
+        <Card className="p-4">
           <h2 className="text-sm font-medium uppercase tracking-wider text-red-600">Apagar tudo</h2>
           <p className="text-sm text-secondary">
             Remove todos os seus compromissos, rotina (regras e ajustes), calendários e feriados. Suas preferências e sua conta são mantidas.
@@ -470,7 +530,7 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
           </p>
           <label className="block text-sm text-secondary">
             Para confirmar, digite {DELETE_CONFIRMATION}
-            <input className="input mt-1 w-full" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} autoComplete="off" />
+            <input className="input w-full" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} autoComplete="off" />
           </label>
           {deleteError && <p role="alert" className="text-sm text-red-600">{deleteError}</p>}
           {deleteMessage && <p role="status" className="text-sm text-green-700">{deleteMessage}</p>}
@@ -481,9 +541,11 @@ export const SettingsPage = ({ userId }: SettingsPageProps) => {
 
       </div>
 
-      <button onClick={() => void handleSave()} className="btn btn-primary mt-8 w-full" disabled={isLoading}>
-        {isLoading ? 'Salvando...' : 'Salvar Preferências'}
-      </button>
+      {(isLoading || message) && (
+        <p role="status" className="settings-save-status">
+          {isLoading ? 'Salvando configurações...' : message}
+        </p>
+      )}
     </section>
   )
 }
