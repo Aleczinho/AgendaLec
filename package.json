@@ -5,15 +5,21 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
+    "dev:api": "npm --prefix server run dev",
     "build": "vite build",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "setup": "npm install && npm --prefix server install && npm --prefix server run generate",
+    "db:migrate": "npm --prefix server run migrate",
+    "user:create": "npm --prefix server run user:create --",
+    "user:password": "npm --prefix server run user:password --",
+    "db:studio": "npm --prefix server run studio"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
     "@vitejs/plugin-react": "^6.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -23,7 +29,8 @@
     "react-dom": "^19.3.1",
     "react-hook-form": "^7.91.0",
     "react-router-dom": "^7.18.4",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "better-auth": "1.7.16"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

@@ -1,39 +1,43 @@
-# AgendaLec no ZimaOS
+# AgendaLec com Docker (ZimaOS ou qualquer servidor)
 
-Este Compose publica o frontend do AgendaLec em um container Nginx. O app
-continua usando o projeto Supabase configurado nas variáveis abaixo; o banco
-de dados e a autenticação não são hospedados por este Compose.
+O Compose sobe **dois containers**:
+
+- `agendalec-api`: API Node que conecta no **seu PostgreSQL** usando o `.env`;
+- `agendalec`: nginx com o site, que repassa `/api` para a API.
+
+O PostgreSQL **não** faz parte do Compose: ele é o que você já hospeda. Veja [../POSTGRES_PASSO_A_PASSO.md](../POSTGRES_PASSO_A_PASSO.md) para preparar o banco.
 
 ## Preparar
 
-1. Copie o projeto completo para o servidor ZimaOS, mantendo a pasta `docker`
-   dentro da raiz do projeto. Ou clone o repositório no servidor.
-2. Na pasta `docker`, copie `.env.example` para `.env`.
-3. Edite `docker/.env` e informe `VITE_SUPABASE_URL` e
-   `VITE_SUPABASE_PUBLISHABLE_KEY` do seu projeto. `APP_PORT` pode ser alterada
-   se a porta `8080` já estiver ocupada.
-4. No terminal do servidor, estando na pasta `docker`, execute:
+1. Copie o projeto completo para o servidor (mantendo `docker/` e `server/` na raiz).
+2. Na **raiz** do projeto: `cp .env.example .env` e preencha `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `BETTER_AUTH_URL` (origem pública do site, por exemplo `http://IP-DO-SERVIDOR:8080`) e `BETTER_AUTH_SECRET` (`openssl rand -base64 32`). `APP_PORT` muda a porta do site (padrão `8080`).
+3. Ainda na raiz, execute:
 
    ```sh
-   docker compose up -d --build
+   docker compose --env-file .env -f docker/compose.yaml up -d --build
    ```
 
-   No ZimaOS, também é possível importar `docker/compose.yaml` pela área Docker
-   e iniciar a stack. Garanta que o contexto de build (`..`) corresponda à raiz
-   do projeto e que as variáveis do arquivo `.env` estejam disponíveis para o
-   Compose.
+4. Acesse `http://IP-DO-SERVIDOR:8080`.
 
-5. Acesse `http://IP-DO-ZIMAOS:8080` (ou a porta definida em `APP_PORT`).
+Veja se a API conectou no banco: `docker logs agendalec-api` (deve mostrar `[db] conectado` e `[api] AgendaLec ouvindo`).
+
+## Criar usuários
+
+```sh
+docker exec -it agendalec-api node scripts/user.js create voce@exemplo.com
+docker exec -it agendalec-api node scripts/user.js password voce@exemplo.com
+```
 
 ## Atualizar
 
-Depois de atualizar os arquivos do projeto:
-
 ```sh
-docker compose up -d --build
+docker compose --env-file .env -f docker/compose.yaml up -d --build
 ```
 
-As variáveis `VITE_*` são incorporadas ao frontend durante o build. Se alterá-las,
-recrie a imagem com o comando acima. Use somente uma chave pública
-(`publishable` ou `anon`): qualquer valor Vite incluído no frontend fica visível
-ao navegador. Nunca coloque a chave `service_role` neste arquivo.
+Mudou algo no `.env` (senha do banco, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `ALLOW_REGISTRATION`)? Basta recriar a API: `docker compose --env-file .env -f docker/compose.yaml up -d api`. Só `VITE_API_URL` exige rebuild do site, pois é embutida no build.
+
+## Problemas comuns
+
+- **API reinicia em loop**: leia `docker logs agendalec-api`; o motivo (senha, host, SSL, `BETTER_AUTH_URL` ou `BETTER_AUTH_SECRET`) aparece na primeira linha.
+- **`ECONNREFUSED` / timeout**: o PostgreSQL não aceita conexões deste container. Confira `listen_addresses`, `pg_hba.conf` e o firewall. Se o banco está no mesmo servidor, use `DB_HOST=host.docker.internal`.
+- **`no pg_hba.conf entry ... no encryption`**: o servidor exige SSL; defina `DB_SSL=true` (ou `no-verify` para certificado autoassinado).

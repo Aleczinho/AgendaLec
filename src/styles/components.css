@@ -41,6 +41,7 @@
 .routine-page,
 .dashboard-page {
   width: 100%;
+  min-width: 0;
 }
 
 .routine-heading {
@@ -572,10 +573,10 @@
 .routine-form textarea {
   width: 100%;
   min-height: 38px;
-  padding: 8px 10px;
+  padding: 8px 34px 8px 10px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--color-surface);
+  background-color: var(--color-surface);
   color: var(--color-text-primary);
   font-size: 12px;
 }
@@ -1102,6 +1103,7 @@
 
 .app-main {
   min-height: 100vh;
+  min-width: 0;
   margin-left: 258px;
   padding: 38px clamp(22px, 3.5vw, 52px) 48px;
 }
@@ -1125,6 +1127,10 @@
   font-weight: 720;
   letter-spacing: -0.8px;
   line-height: 1.25;
+}
+
+.page-heading > div {
+  min-width: 0;
 }
 
 .eyebrow {
@@ -1209,6 +1215,8 @@
 
 .calendar-panel,
 .card {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
@@ -1223,18 +1231,20 @@
 .calendars-page,
 .agenda-page {
   width: 100%;
+  min-width: 0;
 }
 
 .settings-layout {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   align-items: start;
   gap: 20px;
 }
 
 .settings-layout .card {
   display: grid;
-  gap: 16px;
+  min-width: 0;
+  gap: 14px;
 }
 
 .settings-layout .card h2,
@@ -1246,15 +1256,60 @@
   text-transform: uppercase;
 }
 
-.settings-layout .card label {
+.settings-layout .card label:not(.settings-checkbox-label) {
   display: grid;
+  min-width: 0;
   gap: 6px;
   color: var(--color-text-secondary);
   font-size: 12px;
 }
 
-.settings-page > .btn {
-  margin-top: 20px;
+.settings-layout .card > * {
+  min-width: 0;
+}
+
+.settings-layout .card > h2,
+.settings-layout .card > p {
+  margin: 0;
+}
+
+.settings-layout .card p {
+  overflow-wrap: anywhere;
+}
+
+.settings-layout .card .settings-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 1px 0 0;
+  accent-color: var(--color-primary);
+}
+
+.settings-date-range {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 12px;
+}
+
+.settings-feedback {
+  margin: 0 0 16px;
+  overflow-wrap: anywhere;
+}
+
+.settings-save-status {
+  margin: 16px 0 0;
+  color: var(--color-success);
+  font-size: 12px;
+  text-align: right;
 }
 
 .calendar-settings-form {
@@ -1416,10 +1471,10 @@
 .calendar-filter select {
   min-width: 150px;
   min-height: 38px;
-  padding: 0 30px 0 11px;
+  padding: 0 34px 0 11px;
   border: 1px solid var(--color-border);
   border-radius: 9px;
-  background: var(--color-surface);
+  background-color: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: 12px;
 }
@@ -1614,6 +1669,8 @@
 }
 
 .week-day {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 300px;
   border-right: 1px solid var(--color-border);
@@ -1650,6 +1707,7 @@
 
 .week-day-events {
   display: grid;
+  flex: 1;
   align-content: start;
   gap: 6px;
   min-height: 220px;
@@ -1682,6 +1740,12 @@
 }
 
 .week-add-event {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-top: auto;
   padding: 7px 8px;
   background: transparent;
   color: var(--color-primary);
@@ -1855,11 +1919,13 @@
 .input,
 .select {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 42px;
   padding: 9px 11px;
   border: 1px solid var(--color-border);
   border-radius: 9px;
-  background: var(--color-surface);
+  background-color: var(--color-surface);
   color: var(--color-text-primary);
   font-size: 13px;
 }
@@ -2042,4 +2108,44 @@
 
 @media (min-width: 1024px) {
   .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.btn-danger {
+  border-color: var(--color-error);
+  background: transparent;
+  color: var(--color-error);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-error);
+  color: #fff;
+}
+
+select,
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+}
+
+.calendar-filter select,
+.form-field select,
+.routine-copy-panel select,
+.routine-form select,
+.select {
+  padding-right: 34px;
+}
+
+.select-sm {
+  min-height: 38px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  font-size: 12px;
 }

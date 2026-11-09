@@ -1,0 +1,30 @@
+{
+  "name": "agendalec-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API do AgendaLec: autenticação Better Auth e acesso ao PostgreSQL via Prisma ORM",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "generate": "prisma generate",
+    "migrate": "node scripts/migrate.js",
+    "prisma": "node scripts/prisma.js",
+    "studio": "node scripts/prisma.js studio",
+    "user:create": "node scripts/user.js create",
+    "user:password": "node scripts/user.js password",
+    "test": "node --test test/api.integration.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.0",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "prisma": "^6.2.0",
+    "better-auth": "1.7.16"
+  }
+}

@@ -3,17 +3,16 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 
 COPY . .
 
+# O site chama a API em /api (o nginx repassa para o container "api").
+# Só defina VITE_API_URL se a API ficar em outro endereço.
 ARG VITE_BASE_PATH=/
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_PUBLISHABLE_KEY
-
+ARG VITE_API_URL=
 ENV VITE_BASE_PATH=${VITE_BASE_PATH}
-ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-ENV VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
+ENV VITE_API_URL=${VITE_API_URL}
 
 RUN npm run build
 
